@@ -1,9 +1,9 @@
-# Hotel Helm chart
+# Hotel Helm Chart
 
-> **Coming soon** — copy templates from `office/helm/` when the hotel demo is implemented.
+Deploys the OpenRMF hotel world on OpenShift. See [../README.md](../README.md) for launch and task instructions.
 
 ```bash
-cp hotel/helm/values.yaml.example hotel/helm/values.yaml
-# edit values.yaml, then:
-helm upgrade --install rmf-hotel-demo hotel/helm -f hotel/helm/values.yaml -n rmf-demos --create-namespace
+cp values.yaml.example values.yaml
+helm dependency update .
+helm upgrade --install rmf-hotel-demo . -f values.yaml -n <namespace> --wait
 ```

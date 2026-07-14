@@ -58,6 +58,7 @@ rmfWeb:
         cpu: 500m
         memory: 512Mi
   routes:
+    enabled: false
     clusterDomain: apps.example.openshift.com
     dashboardHost: ""
     apiHost: ""
@@ -80,6 +81,7 @@ novnc:
       cpu: 500m
       memory: 256Mi
   routes:
+    enabled: false
     clusterDomain: apps.example.openshift.com
     novncHost: ""
 

@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openrmf-hotel.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "openrmf-hotel.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "openrmf-hotel.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openrmf-hotel.selectorLabels" . | nindent 8 }}
+        rmf.openrobotics.org/demo: {{ .Values.demo.name }}
+    spec:
+      serviceAccountName: {{ include "openrmf-hotel.serviceAccountName" . }}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ .Values.shm.sizeLimit }}
+        - name: ros-logs
+          emptyDir: {}
+        - name: rmf-scripts
+          configMap:
+            name: {{ include "openrmf-hotel.fullname" . }}-scripts
+            defaultMode: 0755
+        {{- if .Values.rmfWeb.enabled }}
+        {{- include "openrmf.lib.rmfWeb.volumes" (list .) | nindent 8 }}
+        {{- include "openrmf.lib.rmfWeb.initVolumes" (list .) | nindent 8 }}
+        {{- end }}
+      {{- if .Values.rmfWeb.enabled }}
+      initContainers:
+        {{- include "openrmf.lib.rmfWeb.initContainers" (list .) | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: simulation
+          image: {{ required "image.fullRef is required" .Values.image.fullRef | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.novnc.enabled }}
+          command: ["/opt/rmf/scripts/launch-simulation-viz.sh"]
+          {{- else }}
+          command: ["/opt/rmf/scripts/launch-simulation.sh"]
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- if .Values.novnc.enabled }}
+            {{- toYaml .Values.resources.simulationViz | nindent 12 }}
+            {{- else }}
+            {{- toYaml .Values.resources.simulation | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: ros-logs
+              mountPath: /opt/rmf/.ros
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/ros-env.sh
+              subPath: ros-env.sh
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/launch-simulation.sh
+              subPath: launch-simulation.sh
+            {{- if .Values.novnc.enabled }}
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/launch-simulation-viz.sh
+              subPath: launch-simulation-viz.sh
+            {{- end }}
+          env:
+            - name: RMF_LAUNCH_FILE
+              value: {{ .Values.demo.launchFile | quote }}
+            {{- if .Values.rmfWeb.enabled }}
+            - name: RMF_SERVER_URI
+              value: {{ .Values.rmfWeb.serverUri | quote }}
+            {{- end }}
+            {{- if not .Values.novnc.enabled }}
+            - name: QT_QPA_PLATFORM
+              value: offscreen
+            - name: LIBGL_ALWAYS_SOFTWARE
+              value: "1"
+            {{- else }}
+            - name: RMF_VNC_PORT
+              value: {{ .Values.novnc.vncPort | quote }}
+            - name: RMF_VNC_WIDTH
+              value: {{ .Values.novnc.displayWidth | quote }}
+            - name: RMF_VNC_HEIGHT
+              value: {{ .Values.novnc.displayHeight | quote }}
+            - name: LIBGL_ALWAYS_SOFTWARE
+              value: "1"
+            {{- end }}
+
+        - name: fleet-monitor
+          image: {{ .Values.image.fullRef | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/opt/rmf/scripts/run-fleet-monitor.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.resources.fleetMonitor | nindent 12 }}
+          volumeMounts:
+            - name: ros-logs
+              mountPath: /opt/rmf/.ros
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/ros-env.sh
+              subPath: ros-env.sh
+
+        - name: task-dispatch
+          image: {{ .Values.image.fullRef | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [{{ .Values.dispatch.command | quote }}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.resources.taskDispatch | nindent 12 }}
+          env:
+            - name: READY_WAIT_SECONDS
+              value: {{ .Values.dispatch.readyWaitSeconds | quote }}
+            - name: STARTUP_WAIT_SECONDS
+              value: {{ .Values.dispatch.startupWaitSeconds | default 0 | quote }}
+          volumeMounts:
+            - name: ros-logs
+              mountPath: /opt/rmf/.ros
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/ros-env.sh
+              subPath: ros-env.sh
+
+        {{- if .Values.rmfWeb.enabled }}
+        {{- include "openrmf.lib.rmfWeb.containers" (list .) | nindent 8 }}
+        {{- end }}
+        {{- if .Values.novnc.enabled }}
+        {{- include "openrmf.lib.novnc.containers" (list .) | nindent 8 }}
+        {{- end }}

@@ -203,6 +203,7 @@ spec:
     - name: http
       port: 80
       targetPort: 8080
+{{- if not (eq $root.Values.rmfWeb.routes.enabled false) }}
 ---
 apiVersion: route.openshift.io/v1
 kind: Route
@@ -259,4 +260,5 @@ spec:
   tls:
     termination: edge
   wildcardPolicy: None
+{{- end }}
 {{- end }}

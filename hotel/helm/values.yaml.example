@@ -11,7 +11,7 @@ namespace:
   name: rmf-demos
 
 image:
-  fullRef: quay.io/your-org/rmf-humble:certified
+  fullRef: quay.io/your-org/openrmf-openshift-hotel-demo:certified
   pullPolicy: Always
 
 pullSecret:
@@ -27,30 +27,79 @@ demo:
 
 dispatch:
   command: /opt/rmf/demos/hotel/scripts/dispatch-task.sh
-  readyWaitSeconds: 60
+  startupWaitSeconds: 30
+  readyWaitSeconds: 90
 
 rmfWeb:
-  enabled: false
+  enabled: true
   serverUri: ws://localhost:8000/_internal
+  apiServer:
+    image: ghcr.io/open-rmf/rmf-web/api-server:jazzy-nightly
+    pullPolicy: IfNotPresent
+    rmwImplementation: rmw_cyclonedds_cpp
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+  dashboard:
+    image: ghcr.io/open-rmf/rmf-web/demo-dashboard:jazzy-nightly
+    nginxImage: nginxinc/nginx-unprivileged:alpine
+    pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
   routes:
+    enabled: false
     clusterDomain: apps.example.openshift.com
+    dashboardHost: ""
+    apiHost: ""
+    trajectoryHost: ""
 
 novnc:
-  enabled: false
+  enabled: true
+  image: quay.io/your-org/openrmf-openshift-hotel-demo:novnc
+  pullPolicy: Always
+  vncPort: 5900
+  webPort: 8080
+  displayWidth: 1280
+  displayHeight: 720
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
   routes:
+    enabled: false
     clusterDomain: apps.example.openshift.com
+    novncHost: ""
 
 shm:
-  sizeLimit: 2Gi
+  sizeLimit: 4Gi
 
 resources:
   simulation:
     requests:
-      cpu: "2"
-      memory: 4Gi
+      cpu: "3"
+      memory: 6Gi
     limits:
+      cpu: "6"
+      memory: 10Gi
+  simulationViz:
+    requests:
       cpu: "4"
       memory: 8Gi
+    limits:
+      cpu: "8"
+      memory: 12Gi
   fleetMonitor:
     requests:
       cpu: 250m

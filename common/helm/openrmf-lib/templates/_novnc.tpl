@@ -37,6 +37,7 @@ spec:
     - name: http
       port: 80
       targetPort: {{ $root.Values.novnc.webPort }}
+{{- if not (eq $root.Values.novnc.routes.enabled false) }}
 ---
 apiVersion: route.openshift.io/v1
 kind: Route
@@ -57,4 +58,5 @@ spec:
   tls:
     termination: edge
   wildcardPolicy: None
+{{- end }}
 {{- end }}
