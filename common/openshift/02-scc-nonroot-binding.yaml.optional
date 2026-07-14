@@ -1,0 +1,17 @@
+# Optional — only needed if you pin runAsUser: 1001 in a Deployment.
+# The default setup relies on restricted SCC + namespace UID allocation instead.
+#
+# oc apply -f common/openshift/02-scc-nonroot-binding.yaml.optional
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rmf-demo-nonroot-scc
+  namespace: rmf-demos
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:nonroot
+subjects:
+  - kind: ServiceAccount
+    name: rmf-demo
+    namespace: rmf-demos

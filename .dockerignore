@@ -1,0 +1,15 @@
+# Build artifacts
+**/install/
+**/build/
+**/log/
+**/.ros/
+
+# Editor / OS
+.DS_Store
+*.swp
+*~
+
+# Demo docs and manifests are not needed inside the image
+**/openshift/
+**/README.md
+**/deploy-openshift.sh

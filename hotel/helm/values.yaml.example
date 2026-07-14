@@ -1,0 +1,67 @@
+# Copy to values.yaml and customize (values.yaml is gitignored)
+#
+#   cp hotel/helm/values.yaml.example hotel/helm/values.yaml
+
+fullnameOverride: rmf-hotel-demo
+
+app:
+  name: openrmf-hotel-demo
+
+namespace:
+  name: rmf-demos
+
+image:
+  fullRef: quay.io/your-org/rmf-humble:certified
+  pullPolicy: Always
+
+pullSecret:
+  name: ""
+
+serviceAccount:
+  create: false
+  name: rmf-demo
+
+demo:
+  name: hotel
+  launchFile: hotel.launch.xml
+
+dispatch:
+  command: /opt/rmf/demos/hotel/scripts/dispatch-task.sh
+  readyWaitSeconds: 60
+
+rmfWeb:
+  enabled: false
+  serverUri: ws://localhost:8000/_internal
+  routes:
+    clusterDomain: apps.example.openshift.com
+
+novnc:
+  enabled: false
+  routes:
+    clusterDomain: apps.example.openshift.com
+
+shm:
+  sizeLimit: 2Gi
+
+resources:
+  simulation:
+    requests:
+      cpu: "2"
+      memory: 4Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+  fleetMonitor:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  taskDispatch:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi

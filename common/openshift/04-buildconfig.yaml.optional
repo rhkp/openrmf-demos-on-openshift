@@ -1,0 +1,21 @@
+# Optional — only if building inside OpenShift instead of Podman + Quay.io
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: rmf-humble
+  namespace: rmf-demos
+  labels:
+    app.kubernetes.io/part-of: openrmf-demos-on-openshift
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: rmf-humble:certified
+  source:
+    type: Binary
+  # Build from repo root: oc start-build rmf-humble --from-dir=. --follow
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: common/Dockerfile
+  triggers: []

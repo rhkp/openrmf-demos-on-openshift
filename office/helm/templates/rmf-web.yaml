@@ -1,0 +1,3 @@
+{{- if .Values.rmfWeb.enabled }}
+{{ include "openrmf.lib.rmfWeb.manifests" (list .) }}
+{{- end }}

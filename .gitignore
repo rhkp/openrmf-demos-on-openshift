@@ -1,0 +1,37 @@
+# Secrets and local environment (never commit)
+.env
+.env.*
+!.env.example
+*.local
+common/image.env
+**/image.env
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+.dockerconfigjson
+.auth.json
+
+# Helm local values (never commit)
+**/values.yaml
+!**/values.yaml.example
+
+# Build artifacts
+**/install/
+**/build/
+**/log/
+**/.ros/
+**/charts/*.tgz
+
+# Editor / OS
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# Python
+**/__pycache__/
+*.pyc

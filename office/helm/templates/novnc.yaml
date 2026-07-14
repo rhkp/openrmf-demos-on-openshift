@@ -1,0 +1,3 @@
+{{- if .Values.novnc.enabled }}
+{{ include "openrmf.lib.novnc.manifests" (list .) }}
+{{- end }}

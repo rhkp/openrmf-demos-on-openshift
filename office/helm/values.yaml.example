@@ -1,0 +1,118 @@
+# Copy to values.yaml and customize (values.yaml is gitignored)
+#
+#   cp office/helm/values.yaml.example office/helm/values.yaml
+
+fullnameOverride: rmf-office-demo
+
+app:
+  name: openrmf-office-demo
+
+namespace:
+  name: rmf-demos
+
+image:
+  # Full Quay.io reference (built with common/build-and-push.sh)
+  fullRef: quay.io/your-org/openrmf-openshift-office-demo:certified
+  pullPolicy: Always
+
+# Optional — for private Quay repositories
+pullSecret:
+  name: ""  # e.g. quay-pull-secret
+
+serviceAccount:
+  create: true
+  name: rmf-demo
+
+demo:
+  name: office
+  launchFile: office.launch.xml
+
+dispatch:
+  command: /opt/rmf/demos/office/scripts/dispatch-task.sh
+  readyWaitSeconds: 30
+
+# RMF Web — 2D dashboard (map, robots, tasks) via OpenShift Routes
+rmfWeb:
+  enabled: true
+  serverUri: ws://localhost:8000/_internal
+  apiServer:
+    image: ghcr.io/open-rmf/rmf-web/api-server:jazzy-nightly
+    pullPolicy: IfNotPresent
+    rmwImplementation: rmw_cyclonedds_cpp
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+  dashboard:
+    image: ghcr.io/open-rmf/rmf-web/demo-dashboard:jazzy-nightly
+    nginxImage: nginxinc/nginx-unprivileged:alpine
+    pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  routes:
+    clusterDomain: apps.example.openshift.com
+    dashboardHost: ""
+    apiHost: ""
+    trajectoryHost: ""
+
+# noVNC — stream Gazebo/RViz virtual desktop to browser
+novnc:
+  enabled: true
+  image: quay.io/your-org/openrmf-openshift-office-demo:novnc
+  pullPolicy: Always
+  vncPort: 5900
+  webPort: 8080
+  displayWidth: 1280
+  displayHeight: 720
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  routes:
+    clusterDomain: apps.example.openshift.com
+    novncHost: ""
+
+shm:
+  sizeLimit: 2Gi
+
+resources:
+  simulation:
+    requests:
+      cpu: "2"
+      memory: 4Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+  # Used when novnc.enabled — Gazebo GUI + RViz need more CPU/RAM
+  simulationViz:
+    requests:
+      cpu: "3"
+      memory: 6Gi
+    limits:
+      cpu: "6"
+      memory: 10Gi
+  fleetMonitor:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  taskDispatch:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi

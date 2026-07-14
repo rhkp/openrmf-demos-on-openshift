@@ -1,0 +1,6 @@
+apiVersion: v2
+name: openrmf-hotel
+description: OpenRMF hotel demo on OpenShift (coming soon)
+type: application
+version: 0.1.0
+appVersion: "humble"

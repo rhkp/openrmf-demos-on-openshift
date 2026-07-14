@@ -1,0 +1,5 @@
+apiVersion: v2
+name: openrmf-lib
+description: Shared Helm library for OpenRMF demos (RMF Web dashboard + noVNC)
+type: library
+version: 0.1.0

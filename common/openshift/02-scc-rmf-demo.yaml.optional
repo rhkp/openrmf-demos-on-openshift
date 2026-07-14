@@ -1,0 +1,42 @@
+# Optional fallback SCC — use only if Gazebo fails under nonroot/restricted.
+# Uncomment users binding and apply after reviewing SCC requirements.
+#
+# apiVersion: security.openshift.io/v1
+# kind: SecurityContextConstraints
+# metadata:
+#   name: rmf-demo-scc
+# allowHostDirVolumePlugin: false
+# allowHostIPC: false
+# allowHostNetwork: false
+# allowHostPID: false
+# allowHostPorts: false
+# allowPrivilegeEscalation: true
+# allowPrivilegedContainer: false
+# allowedCapabilities: []
+# fsGroup:
+#   type: MustRunAs
+#   ranges:
+#     - min: 1001
+#       max: 1001
+# readOnlyRootFilesystem: false
+# requiredDropCapabilities:
+#   - KILL
+#   - MKNOD
+#   - SETUID
+#   - SETGID
+# runAsUser:
+#   type: MustRunAs
+#   uid: 1001
+# seLinuxContext:
+#   type: MustRunAs
+# supplementalGroups:
+#   type: RunAsAny
+# volumes:
+#   - configMap
+#   - downwardAPI
+#   - emptyDir
+#   - persistentVolumeClaim
+#   - projected
+#   - secret
+# users:
+#   - system:serviceaccount:rmf-demos:rmf-demo

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: openrmf-airport
+description: OpenRMF airport demo on OpenShift (coming soon)
+type: application
+version: 0.1.0
+appVersion: "humble"
