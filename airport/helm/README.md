@@ -1,9 +1,9 @@
-# Airport Helm chart
+# Airport Helm Chart
 
-> **Coming soon** — copy templates from `office/helm/` when the airport demo is implemented.
+Deploys the OpenRMF airport terminal world on OpenShift. See [../README.md](../README.md) for launch and task instructions.
 
 ```bash
-cp airport/helm/values.yaml.example airport/helm/values.yaml
-# edit values.yaml, then:
-helm upgrade --install rmf-airport-demo airport/helm -f airport/helm/values.yaml -n rmf-demos --create-namespace
+cp values.yaml.example values.yaml
+helm dependency update .
+helm upgrade --install rmf-airport-demo . -f values.yaml -n <namespace> --wait
 ```

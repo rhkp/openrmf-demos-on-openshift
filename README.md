@@ -21,7 +21,9 @@ office/                     # Office world (ready)
     templates/
   deploy-openshift.sh
 
-airport/helm/               # Stub (values.yaml.example ready)
+airport/                    # Airport terminal world (ready)
+  helm/
+  deploy-openshift.sh
 hotel/                      # Hotel world (ready)
   helm/
   deploy-openshift.sh
@@ -73,6 +75,16 @@ cp hotel/helm/values.yaml.example hotel/helm/values.yaml
 ./hotel/deploy-openshift.sh
 ```
 
+## Quick start — airport demo
+
+See [airport/README.md](airport/README.md) for full docs.
+
+```bash
+cp airport/helm/values.yaml.example airport/helm/values.yaml
+# Edit image refs and namespace (airport image: openrmf-openshift-airport-demo)
+./airport/deploy-openshift.sh
+```
+
 ## Prerequisites
 
 - OpenShift 4.x cluster
@@ -86,7 +98,7 @@ cp hotel/helm/values.yaml.example hotel/helm/values.yaml
 |---|---|
 | `office/helm/values.yaml` | Image ref, pull secrets, resources |
 | `hotel/helm/values.yaml` | Same pattern |
-| `airport/helm/values.yaml` | Same pattern (when ready) |
+| `airport/helm/values.yaml` | Same pattern |
 | `common/image.env` | Optional fallback for builds without Helm values |
 | `.env`, `.env.local` | General secrets |
 

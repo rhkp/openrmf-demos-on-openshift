@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and push office + hotel demo images to Quay.io.
+# Build and push office, hotel, and airport demo images to Quay.io.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,6 +29,12 @@ echo "========================================"
 echo "Building hotel demo images"
 echo "========================================"
 VALUES_FILE="${ROOT_DIR}/hotel/helm/values.yaml" "${ROOT_DIR}/common/build-and-push.sh"
+
+echo ""
+echo "========================================"
+echo "Building airport demo images"
+echo "========================================"
+VALUES_FILE="${ROOT_DIR}/airport/helm/values.yaml" "${ROOT_DIR}/common/build-and-push.sh"
 
 echo ""
 echo "All demo images pushed to Quay.io."

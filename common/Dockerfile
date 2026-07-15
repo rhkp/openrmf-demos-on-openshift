@@ -46,6 +46,7 @@ COPY common/scripts/ /opt/rmf/scripts/
 # 7. Copy per-demo scripts (add a COPY line when introducing a new demo)
 COPY office/scripts/ /opt/rmf/demos/office/scripts/
 COPY hotel/scripts/ /opt/rmf/demos/hotel/scripts/
+COPY airport/scripts/ /opt/rmf/demos/airport/scripts/
 
 RUN find /opt/rmf/scripts /opt/rmf/demos -name '*.sh' -exec chmod +x {} +
 
