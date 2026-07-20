@@ -31,6 +31,16 @@ hotel/                      # Hotel world (ready)
 
 ## Quick start — office demo
 
+### Local validation with Podman (optional)
+
+Validate on a Linux VM **before** OpenShift. See [office/PODMAN-VALIDATION.md](office/PODMAN-VALIDATION.md).
+
+```bash
+chmod +x office/run-podman-local.sh
+./office/run-podman-local.sh build
+./office/run-podman-local.sh start-desktop   # xrdp/GUI, or: start (headless)
+```
+
 ### 1. Configure Helm values
 
 ```bash
@@ -108,10 +118,11 @@ Committed templates: `values.yaml.example` in each demo's `helm/` folder.
 
 | Concern | Approach |
 |---|---|
-| Image build | Podman (`common/build-and-push.sh`) |
+| Image build | Podman (`common/build-and-push.sh` or `common/build-all-demos.sh`) |
 | Image registry | Quay.io (`image.fullRef` in `values.yaml`) |
 | OpenShift deploy | Helm chart per demo |
 | Pull secrets | `pullSecret.name` in `values.yaml` → ServiceAccount |
+| Local validation | `office/run-podman-local.sh` (see [office/PODMAN-VALIDATION.md](office/PODMAN-VALIDATION.md)) |
 
 ## Adding a new demo
 
@@ -131,4 +142,4 @@ Committed templates: `values.yaml.example` in each demo's `helm/` folder.
 
 Both visualizations live in `common/helm/openrmf-lib/` and are wired in the office chart. Enable either or both in `values.yaml`.
 
-See [office/README.md](office/README.md#visualization) for browser URLs and verification.
+See [office/README.md](office/README.md#3-view-the-demo) for browser URLs and verification.

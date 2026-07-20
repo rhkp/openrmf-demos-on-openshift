@@ -5,6 +5,8 @@ Indoor office world from [rmf_demos](https://github.com/open-rmf/rmf_demos) (`of
 **Stack:** Podman build → Quay.io → Helm on OpenShift  
 **Visualization:** RMF Web dashboard (2D) + noVNC (Gazebo/RViz in browser)
 
+> **Podman local validation (pre-OpenShift):** See [PODMAN-VALIDATION.md](PODMAN-VALIDATION.md) and `./run-podman-local.sh`.
+
 ---
 
 ## Prerequisites

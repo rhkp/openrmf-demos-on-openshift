@@ -1,6 +1,6 @@
 # Shared OpenRMF demos image — ROS 2 Humble + rmf_demos workspace
 # Built from the certified ROS 2 Humble base image.
-FROM osrf/ros:humble-desktop
+FROM docker.io/osrf/ros:humble-desktop
 
 ENV DEBIAN_FRONTEND=noninteractive
 
