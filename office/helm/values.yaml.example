@@ -57,12 +57,17 @@ rmfWeb:
       limits:
         cpu: 500m
         memory: 512Mi
+  # Option A: OpenShift Routes (public access)
   routes:
     enabled: false
     clusterDomain: apps.example.openshift.com
     dashboardHost: ""
     apiHost: ""
     trajectoryHost: ""
+  # Option B: oc port-forward (local-only access, when routes.enabled=false)
+  #   Run: ./office/port-forward.sh <namespace>
+  portForward:
+    dashboardPort: "3000"
 
 # noVNC — stream Gazebo/RViz virtual desktop to browser
 novnc:

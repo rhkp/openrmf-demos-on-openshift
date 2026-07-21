@@ -2,9 +2,9 @@ apiVersion: v2
 name: openrmf-hotel
 description: OpenRMF hotel demo on OpenShift (multi-level Gazebo + fleet monitor + patrol dispatch)
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "humble"
 dependencies:
   - name: openrmf-lib
-    version: 0.1.0
+    version: 0.2.0
     repository: file://../../common/helm/openrmf-lib

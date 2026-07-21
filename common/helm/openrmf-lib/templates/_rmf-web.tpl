@@ -126,6 +126,8 @@ spec:
       {{- include "openrmf.lib.rmfWebSelectorLabels" $root | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include "openrmf.lib.rmfWeb.configmaps" (list $root) | sha256sum }}
       labels:
         {{- include "openrmf.lib.rmfWebSelectorLabels" $root | nindent 8 }}
         rmf.openrobotics.org/demo: {{ $root.Values.demo.name }}
@@ -182,7 +184,32 @@ metadata:
     {{- include "openrmf.lib.labels" $root | nindent 4 }}
 data:
   default.conf: |
-{{ $root.Files.Get "charts/openrmf-lib/files/dashboard-nginx.conf" | indent 4 }}
+    server {
+      listen 8080;
+      server_name _;
+      root /usr/share/nginx/html;
+      index index.html;
+
+      location / {
+        try_files $uri $uri/ /index.html;
+      }
+
+      location /rmf-api/ {
+        proxy_pass http://{{ include "openrmf.lib.fullname" $root }}-api:80/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+      }
+
+      location /rmf-traj/ {
+        proxy_pass http://{{ include "openrmf.lib.fullname" $root }}-trajectory:80/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+      }
+    }
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -193,7 +220,34 @@ metadata:
     {{- include "openrmf.lib.labels" $root | nindent 4 }}
 data:
   dashboard-init.sh: |
-{{ $root.Files.Get "charts/openrmf-lib/files/dashboard-init.sh" | indent 4 }}
+    #!/bin/sh
+    set -e
+
+    cp -r /opt/dashboard/. /dashboard/
+
+    API_URL="${RMF_SERVER_URL}"
+    TRAJ_URL="${TRAJECTORY_SERVER_URL}"
+
+    if [ -f /dashboard/app-config.json ]; then
+      sed -i \
+        -e "s|\"rmfServerUrl\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"rmfServerUrl\": \"${API_URL}\"|g" \
+        -e "s|\"trajectoryServerUrl\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"trajectoryServerUrl\": \"${TRAJ_URL}\"|g" \
+        /dashboard/app-config.json
+    fi
+
+    find /dashboard -type f \( -name '*.js' -o -name '*.html' -o -name '*.json' \) | while read -r f; do
+      if grep -q 'localhost:8000\|localhost:8006' "$f" 2>/dev/null; then
+        sed -i \
+          -e "s|http://localhost:8000|${API_URL}|g" \
+          -e "s|https://localhost:8000|${API_URL}|g" \
+          -e "s|ws://localhost:8006|${TRAJ_URL}|g" \
+          -e "s|wss://localhost:8006|${TRAJ_URL}|g" \
+          -e "s|http://localhost:8006|${TRAJ_URL}|g" \
+          "$f"
+      fi
+    done
+
+    echo "[dashboard-init] Patched dashboard assets (API=${API_URL}, trajectory=${TRAJ_URL})"
 {{- end }}
 
 {{- define "openrmf.lib.rmfWeb.manifests" -}}

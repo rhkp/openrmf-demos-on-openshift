@@ -98,6 +98,30 @@ Or read them from deploy output / `values.yaml` hosts + `clusterDomain`.
 
 **RMF Web:** 2D map, fleet state, tasks. Stub auth is preconfigured for the demo.
 
+### 3b. View the demo (port-forward — no routes)
+
+If routes are disabled (`rmfWeb.routes.enabled: false`, `novnc.routes.enabled: false`), use `oc port-forward` for secure local-only access — nothing is exposed publicly.
+
+```bash
+./office/port-forward.sh <namespace> [release-name]
+
+# Example:
+./office/port-forward.sh arhkp1-openrmf rmf-office-demo
+```
+
+| View | Local URL |
+|---|---|
+| **RMF Web dashboard** | `http://localhost:3000` |
+| **noVNC** (Gazebo/RViz) | `http://localhost:6080` |
+
+Custom ports via environment variables:
+
+```bash
+DASH_PORT=8080 NOVNC_PORT=9090 ./office/port-forward.sh arhkp1-openrmf
+```
+
+The dashboard nginx proxies API and trajectory WebSocket requests to internal services — only two port-forwards are needed.
+
 ---
 
 ## 4. Submit a patrol task

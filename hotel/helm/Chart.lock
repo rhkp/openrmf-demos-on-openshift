@@ -1,6 +1,6 @@
 dependencies:
 - name: openrmf-lib
   repository: file://../../common/helm/openrmf-lib
-  version: 0.1.0
-digest: sha256:9f77011cc206ed025ca38704989b99a579190b89c046afec14588a6903e90653
-generated: "2026-07-14T15:56:09.176379-04:00"
+  version: 0.2.0
+digest: sha256:dbd2d320cd72a5fa82d39d7d15e39a70946d3e8eb59d4b0c06a3eeb814d1416f
+generated: "2026-07-21T12:55:32.265504-04:00"

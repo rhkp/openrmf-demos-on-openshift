@@ -48,7 +48,8 @@ app.kubernetes.io/component: zenoh-router
 {{- end }}
 
 {{- define "openrmf.lib.rmfWeb.urls" -}}
-{{- $clusterDomain := required "rmfWeb.routes.clusterDomain is required when rmfWeb.enabled" .Values.rmfWeb.routes.clusterDomain }}
+{{- if not (eq .Values.rmfWeb.routes.enabled false) }}
+{{- $clusterDomain := required "rmfWeb.routes.clusterDomain is required when routes are enabled" .Values.rmfWeb.routes.clusterDomain }}
 {{- $apiHost := default (printf "%s-api-%s" (include "openrmf.lib.fullname" .) .Values.namespace.name) .Values.rmfWeb.routes.apiHost }}
 {{- $trajHost := default (printf "%s-traj-%s" (include "openrmf.lib.fullname" .) .Values.namespace.name) .Values.rmfWeb.routes.trajectoryHost }}
 {{- $dashHost := default (printf "%s-dashboard-%s" (include "openrmf.lib.fullname" .) .Values.namespace.name) .Values.rmfWeb.routes.dashboardHost }}
@@ -56,6 +57,13 @@ app.kubernetes.io/component: zenoh-router
 {{- $trajUrl := printf "wss://%s.%s" $trajHost $clusterDomain }}
 {{- $dashUrl := printf "https://%s.%s" $dashHost $clusterDomain }}
 {{- dict "clusterDomain" $clusterDomain "apiHost" $apiHost "trajHost" $trajHost "dashHost" $dashHost "apiUrl" $apiUrl "trajUrl" $trajUrl "dashUrl" $dashUrl | toJson }}
+{{- else }}
+{{- $localPort := default "3000" .Values.rmfWeb.portForward.dashboardPort }}
+{{- $apiUrl := printf "http://localhost:%s/rmf-api" $localPort }}
+{{- $trajUrl := printf "ws://localhost:%s/rmf-traj" $localPort }}
+{{- $dashUrl := printf "http://localhost:%s" $localPort }}
+{{- dict "clusterDomain" "" "apiHost" "" "trajHost" "" "dashHost" "" "apiUrl" $apiUrl "trajUrl" $trajUrl "dashUrl" $dashUrl | toJson }}
+{{- end }}
 {{- end }}
 
 {{- define "openrmf.lib.novnc.urls" -}}
