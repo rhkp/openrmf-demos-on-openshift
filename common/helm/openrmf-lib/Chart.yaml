@@ -1,5 +1,5 @@
 apiVersion: v2
 name: openrmf-lib
-description: Shared Helm library for OpenRMF demos (RMF Web dashboard + noVNC)
+description: Shared Helm library for OpenRMF demos (RMF Web dashboard + noVNC + Zenoh router)
 type: library
-version: 0.1.0
+version: 0.2.0

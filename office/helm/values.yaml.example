@@ -34,11 +34,11 @@ dispatch:
 # RMF Web — 2D dashboard (map, robots, tasks) via OpenShift Routes
 rmfWeb:
   enabled: true
-  serverUri: ws://localhost:8000/_internal
+  serverUri: ws://rmf-office-demo-api:80/_internal
   apiServer:
-    image: ghcr.io/open-rmf/rmf-web/api-server:jazzy-nightly
-    pullPolicy: IfNotPresent
-    rmwImplementation: rmw_cyclonedds_cpp
+    image: quay.io/your-org/openrmf-rmf-web-zenoh:latest
+    pullPolicy: Always
+    rmwImplementation: rmw_zenoh_cpp
     resources:
       requests:
         cpu: 250m
@@ -85,8 +85,22 @@ novnc:
     clusterDomain: apps.example.openshift.com
     novncHost: ""
 
+# Zenoh Router — central message broker (replaces DDS)
+zenoh:
+  enabled: true
+  image: quay.io/your-org/openrmf-zenoh-router:latest
+  pullPolicy: Always
+  port: 7447
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
 shm:
-  sizeLimit: 2Gi
+  sizeLimit: 64Mi
 
 resources:
   simulation:

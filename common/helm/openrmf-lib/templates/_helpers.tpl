@@ -29,6 +29,24 @@ app.kubernetes.io/name: {{ include "openrmf.lib.appName" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+{{- define "openrmf.lib.simulationSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "openrmf.lib.appName" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: simulation
+{{- end }}
+
+{{- define "openrmf.lib.rmfWebSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "openrmf.lib.appName" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: rmf-web
+{{- end }}
+
+{{- define "openrmf.lib.zenohRouterSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "openrmf.lib.appName" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: zenoh-router
+{{- end }}
+
 {{- define "openrmf.lib.rmfWeb.urls" -}}
 {{- $clusterDomain := required "rmfWeb.routes.clusterDomain is required when rmfWeb.enabled" .Values.rmfWeb.routes.clusterDomain }}
 {{- $apiHost := default (printf "%s-api-%s" (include "openrmf.lib.fullname" .) .Values.namespace.name) .Values.rmfWeb.routes.apiHost }}

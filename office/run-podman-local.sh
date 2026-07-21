@@ -18,8 +18,9 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PODMAN="${PODMAN:-podman}"
 IMAGE="${RMF_IMAGE:-openrmf-office-demo:local}"
 NOVNC_IMAGE="${NOVNC_IMAGE:-openrmf-office-demo:novnc}"
+ZENOH_IMAGE="${ZENOH_IMAGE:-openrmf-zenoh-router:local}"
+API_SERVER_IMAGE="${API_SERVER_IMAGE:-openrmf-rmf-web-zenoh:local}"
 ROS_VOL="${ROS_VOL:-openrmf-office-ros}"
-SHM_VOL="${SHM_VOL:-openrmf-office-shm}"
 NETWORK="${PODMAN_NETWORK:-host}"
 LAUNCH_FILE="${RMF_LAUNCH_FILE:-office.launch.xml}"
 SERVER_URI="${RMF_SERVER_URI:-ws://localhost:8000/_internal}"
@@ -32,12 +33,14 @@ DISPATCH_NAME="rmf-office-task-dispatch"
 API_NAME="rmf-office-api"
 DASH_NAME="rmf-office-dashboard"
 NOVNC_NAME="rmf-office-novnc"
+ZENOH_NAME="rmf-office-zenoh-router"
 
 common_run_flags() {
   echo --rm -d --network "${NETWORK}" \
-    --shm-size=2g \
     -v "${ROS_VOL}:/opt/rmf/.ros" \
-    -e ROS_LOCALHOST_ONLY=1 \
+    -e RMW_IMPLEMENTATION=rmw_zenoh_cpp \
+    -e ZENOH_ROUTER_ENDPOINT=tcp/localhost:7447 \
+    -e "ZENOH_CONFIG_OVERRIDE=connect/endpoints=[\"tcp/localhost:7447\"]" \
     -e RMF_LAUNCH_FILE="${LAUNCH_FILE}" \
     -e RMF_SERVER_URI="${SERVER_URI}"
 }
@@ -50,6 +53,13 @@ cmd_build() {
     -t "${IMAGE}" \
     "${ROOT_DIR}"
 
+  echo "==> Building ${ZENOH_IMAGE}"
+  "${PODMAN}" build \
+    --platform linux/amd64 \
+    -f "${ROOT_DIR}/common/zenoh-router/Dockerfile" \
+    -t "${ZENOH_IMAGE}" \
+    "${ROOT_DIR}/common/zenoh-router"
+
   if [[ "${WITH_NOVNC}" == "1" ]]; then
     echo "==> Building ${NOVNC_IMAGE}"
     "${PODMAN}" build \
@@ -58,13 +68,42 @@ cmd_build() {
       -t "${NOVNC_IMAGE}" \
       "${ROOT_DIR}/common/novnc"
   fi
+
+  echo "==> Building ${API_SERVER_IMAGE}"
+  "${PODMAN}" build \
+    --platform linux/amd64 \
+    -f "${ROOT_DIR}/common/rmf-web-zenoh/Dockerfile" \
+    -t "${API_SERVER_IMAGE}" \
+    "${ROOT_DIR}/common/rmf-web-zenoh"
 }
 
 cmd_stop() {
-  for c in "${NOVNC_NAME}" "${DASH_NAME}" "${API_NAME}" "${DISPATCH_NAME}" "${FLEET_NAME}" "${SIM_NAME}"; do
+  for c in "${NOVNC_NAME}" "${DASH_NAME}" "${API_NAME}" "${DISPATCH_NAME}" "${FLEET_NAME}" "${SIM_NAME}" "${ZENOH_NAME}"; do
     "${PODMAN}" rm -f "${c}" 2>/dev/null || true
   done
   echo "==> Stopped office demo containers"
+}
+
+cmd_start_zenoh_router() {
+  echo "==> Starting Zenoh router (tcp/0.0.0.0:7447)"
+  local config_dir
+  config_dir="$(mktemp -d)"
+  cat > "${config_dir}/router-config.json5" <<'ZEOF'
+{
+  mode: "router",
+  listen: {
+    endpoints: ["tcp/0.0.0.0:7447"]
+  },
+  scouting: {
+    multicast: {
+      enabled: false
+    }
+  }
+}
+ZEOF
+  "${PODMAN}" run --name "${ZENOH_NAME}" --rm -d --network "${NETWORK}" \
+    -v "${config_dir}:/etc/zenoh:ro" \
+    "${ZENOH_IMAGE}"
 }
 
 cmd_start_sim() {
@@ -117,9 +156,9 @@ cmd_start_sidecars() {
 cmd_start_rmf_web() {
   echo "==> Starting RMF Web API (host network, localhost:8000)"
   "${PODMAN}" run --name "${API_NAME}" --rm -d --network host \
-    -e ROS_LOCALHOST_ONLY=1 \
-    -e RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
-    ghcr.io/open-rmf/rmf-web/api-server:jazzy-nightly \
+    -e RMW_IMPLEMENTATION=rmw_zenoh_cpp \
+    -e "ZENOH_CONFIG_OVERRIDE=connect/endpoints=[\"tcp/localhost:7447\"]" \
+    "${API_SERVER_IMAGE}" \
     bash -c 'source /opt/ros/jazzy/setup.bash && exec rmf_api_server'
 
   echo "==> Starting RMF Web dashboard (host network, localhost:3000)"
@@ -138,6 +177,8 @@ cmd_start() {
   local mode="${1:-headless}"
   cmd_stop
   "${PODMAN}" volume create "${ROS_VOL}" 2>/dev/null || true
+  cmd_start_zenoh_router
+  sleep 2
   cmd_start_sim "${mode}"
   sleep 5
   cmd_start_sidecars
@@ -150,6 +191,7 @@ cmd_start() {
   cmd_status
   echo ""
   echo "Give simulation ~2 minutes to load Gazebo, then check logs:"
+  echo "  ${PODMAN} logs -f ${ZENOH_NAME}"
   echo "  ${PODMAN} logs -f ${SIM_NAME}"
   echo "  ${PODMAN} logs -f ${FLEET_NAME}"
   echo "  ${PODMAN} logs -f ${DISPATCH_NAME}"

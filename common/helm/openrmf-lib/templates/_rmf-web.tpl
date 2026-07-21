@@ -54,10 +54,12 @@
       exec rmf_api_server
   workingDir: /ws
   env:
-    - name: ROS_LOCALHOST_ONLY
-      value: "1"
     - name: RMW_IMPLEMENTATION
       value: {{ $root.Values.rmfWeb.apiServer.rmwImplementation | quote }}
+    {{- if $root.Values.zenoh.enabled }}
+    - name: ZENOH_CONFIG_OVERRIDE
+      value: {{ printf "connect/endpoints=[\"tcp/%s-zenoh-router:%v\"]" (include "openrmf.lib.fullname" $root) $root.Values.zenoh.port | quote }}
+    {{- end }}
     - name: HOME
       value: /tmp
     - name: ROS_LOG_DIR
@@ -102,6 +104,44 @@
       subPath: default.conf
   resources:
     {{- toYaml $root.Values.rmfWeb.dashboard.resources | nindent 4 }}
+{{- end }}
+
+{{/*
+RMF Web — standalone Deployment (for multi-pod architecture)
+*/}}
+{{- define "openrmf.lib.rmfWeb.deployment" -}}
+{{- $root := index . 0 }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openrmf.lib.fullname" $root }}-rmf-web
+  namespace: {{ $root.Values.namespace.name }}
+  labels:
+    {{- include "openrmf.lib.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: rmf-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "openrmf.lib.rmfWebSelectorLabels" $root | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openrmf.lib.rmfWebSelectorLabels" $root | nindent 8 }}
+        rmf.openrobotics.org/demo: {{ $root.Values.demo.name }}
+    spec:
+      serviceAccountName: {{ default "rmf-demo" $root.Values.serviceAccount.name }}
+      restartPolicy: Always
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        {{- include "openrmf.lib.rmfWeb.volumes" (list $root) | nindent 8 }}
+        {{- include "openrmf.lib.rmfWeb.initVolumes" (list $root) | nindent 8 }}
+      initContainers:
+        {{- include "openrmf.lib.rmfWeb.initContainers" (list $root) | nindent 8 }}
+      containers:
+        {{- include "openrmf.lib.rmfWeb.containers" (list $root) | nindent 8 }}
 {{- end }}
 
 {{- define "openrmf.lib.rmfWeb.configmaps" -}}
@@ -168,7 +208,7 @@ metadata:
     {{- include "openrmf.lib.labels" $root | nindent 4 }}
 spec:
   selector:
-    {{- include "openrmf.lib.selectorLabels" $root | nindent 4 }}
+    {{- include "openrmf.lib.rmfWebSelectorLabels" $root | nindent 4 }}
   ports:
     - name: http
       port: 80
@@ -183,7 +223,7 @@ metadata:
     {{- include "openrmf.lib.labels" $root | nindent 4 }}
 spec:
   selector:
-    {{- include "openrmf.lib.selectorLabels" $root | nindent 4 }}
+    {{- include "openrmf.lib.rmfWebSelectorLabels" $root | nindent 4 }}
   ports:
     - name: ws
       port: 80
@@ -198,7 +238,7 @@ metadata:
     {{- include "openrmf.lib.labels" $root | nindent 4 }}
 spec:
   selector:
-    {{- include "openrmf.lib.selectorLabels" $root | nindent 4 }}
+    {{- include "openrmf.lib.rmfWebSelectorLabels" $root | nindent 4 }}
   ports:
     - name: http
       port: 80

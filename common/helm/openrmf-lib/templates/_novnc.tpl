@@ -32,7 +32,7 @@ metadata:
     {{- include "openrmf.lib.labels" $root | nindent 4 }}
 spec:
   selector:
-    {{- include "openrmf.lib.selectorLabels" $root | nindent 4 }}
+    {{- include "openrmf.lib.simulationSelectorLabels" $root | nindent 4 }}
   ports:
     - name: http
       port: 80
