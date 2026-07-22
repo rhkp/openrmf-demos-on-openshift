@@ -5,15 +5,16 @@ metadata:
   namespace: {{ .Values.namespace.name }}
   labels:
     {{- include "openrmf-airport.labels" . | nindent 4 }}
+    app.kubernetes.io/component: simulation
 spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "openrmf-airport.selectorLabels" . | nindent 6 }}
+      {{- include "openrmf.lib.simulationSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "openrmf-airport.selectorLabels" . | nindent 8 }}
+        {{- include "openrmf.lib.simulationSelectorLabels" . | nindent 8 }}
         rmf.openrobotics.org/demo: {{ .Values.demo.name }}
     spec:
       serviceAccountName: {{ include "openrmf-airport.serviceAccountName" . }}
@@ -33,14 +34,6 @@ spec:
           configMap:
             name: {{ include "openrmf-airport.fullname" . }}-scripts
             defaultMode: 0755
-        {{- if .Values.rmfWeb.enabled }}
-        {{- include "openrmf.lib.rmfWeb.volumes" (list .) | nindent 8 }}
-        {{- include "openrmf.lib.rmfWeb.initVolumes" (list .) | nindent 8 }}
-        {{- end }}
-      {{- if .Values.rmfWeb.enabled }}
-      initContainers:
-        {{- include "openrmf.lib.rmfWeb.initContainers" (list .) | nindent 8 }}
-      {{- end }}
       containers:
         - name: simulation
           image: {{ required "image.fullRef is required" .Values.image.fullRef | quote }}
@@ -84,6 +77,10 @@ spec:
             - name: RMF_SERVER_URI
               value: {{ .Values.rmfWeb.serverUri | quote }}
             {{- end }}
+            {{- if .Values.zenoh.enabled }}
+            - name: ZENOH_ROUTER_ENDPOINT
+              value: {{ printf "tcp/%s-zenoh-router:%v" (include "openrmf-airport.fullname" .) .Values.zenoh.port | quote }}
+            {{- end }}
             {{- if not .Values.novnc.enabled }}
             - name: QT_QPA_PLATFORM
               value: offscreen
@@ -111,6 +108,11 @@ spec:
               drop: ["ALL"]
           resources:
             {{- toYaml .Values.resources.fleetMonitor | nindent 12 }}
+          env:
+            {{- if .Values.zenoh.enabled }}
+            - name: ZENOH_ROUTER_ENDPOINT
+              value: {{ printf "tcp/%s-zenoh-router:%v" (include "openrmf-airport.fullname" .) .Values.zenoh.port | quote }}
+            {{- end }}
           volumeMounts:
             - name: ros-logs
               mountPath: /opt/rmf/.ros
@@ -134,6 +136,10 @@ spec:
               value: {{ .Values.dispatch.readyWaitSeconds | quote }}
             - name: STARTUP_WAIT_SECONDS
               value: {{ .Values.dispatch.startupWaitSeconds | default 0 | quote }}
+            {{- if .Values.zenoh.enabled }}
+            - name: ZENOH_ROUTER_ENDPOINT
+              value: {{ printf "tcp/%s-zenoh-router:%v" (include "openrmf-airport.fullname" .) .Values.zenoh.port | quote }}
+            {{- end }}
           volumeMounts:
             - name: ros-logs
               mountPath: /opt/rmf/.ros
@@ -141,9 +147,6 @@ spec:
               mountPath: /opt/rmf/scripts/ros-env.sh
               subPath: ros-env.sh
 
-        {{- if .Values.rmfWeb.enabled }}
-        {{- include "openrmf.lib.rmfWeb.containers" (list .) | nindent 8 }}
-        {{- end }}
         {{- if .Values.novnc.enabled }}
         {{- include "openrmf.lib.novnc.containers" (list .) | nindent 8 }}
         {{- end }}

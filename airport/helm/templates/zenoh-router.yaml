@@ -1,0 +1,7 @@
+{{- if .Values.zenoh.enabled }}
+{{ include "openrmf.lib.zenohRouter.configmap" (list .) }}
+---
+{{ include "openrmf.lib.zenohRouter.deployment" (list .) }}
+---
+{{ include "openrmf.lib.zenohRouter.service" (list .) }}
+{{- end }}

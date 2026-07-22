@@ -11,11 +11,13 @@ namespace:
   name: rmf-demos
 
 image:
+  # Full Quay.io reference (built with common/build-and-push.sh)
   fullRef: quay.io/your-org/openrmf-openshift-airport-demo:certified
   pullPolicy: Always
 
+# Optional — for private Quay repositories
 pullSecret:
-  name: ""
+  name: ""  # e.g. quay-pull-secret
 
 serviceAccount:
   create: false
@@ -30,13 +32,14 @@ dispatch:
   startupWaitSeconds: 45
   readyWaitSeconds: 120
 
+# RMF Web — 2D dashboard (map, robots, tasks)
 rmfWeb:
   enabled: true
-  serverUri: ws://localhost:8000/_internal
+  serverUri: ws://rmf-airport-demo-api:80/_internal
   apiServer:
-    image: ghcr.io/open-rmf/rmf-web/api-server:jazzy-nightly
-    pullPolicy: IfNotPresent
-    rmwImplementation: rmw_cyclonedds_cpp
+    image: quay.io/your-org/openrmf-rmf-web-zenoh:latest
+    pullPolicy: Always
+    rmwImplementation: rmw_zenoh_cpp
     resources:
       requests:
         cpu: 250m
@@ -55,13 +58,19 @@ rmfWeb:
       limits:
         cpu: 500m
         memory: 512Mi
+  # Option A: OpenShift Routes (public access)
   routes:
     enabled: false
     clusterDomain: apps.example.openshift.com
     dashboardHost: ""
     apiHost: ""
     trajectoryHost: ""
+  # Option B: oc port-forward (local-only access, when routes.enabled=false)
+  #   Run: ./airport/port-forward.sh <namespace>
+  portForward:
+    dashboardPort: "3000"
 
+# noVNC — stream Gazebo/RViz virtual desktop to browser
 novnc:
   enabled: true
   image: quay.io/your-org/openrmf-openshift-airport-demo:novnc
@@ -82,8 +91,22 @@ novnc:
     clusterDomain: apps.example.openshift.com
     novncHost: ""
 
+# Zenoh Router — central message broker (replaces DDS)
+zenoh:
+  enabled: true
+  image: quay.io/your-org/openrmf-zenoh-router:latest
+  pullPolicy: Always
+  port: 7447
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
 shm:
-  sizeLimit: 6Gi
+  sizeLimit: 64Mi
 
 resources:
   simulation:
@@ -93,6 +116,7 @@ resources:
     limits:
       cpu: "8"
       memory: 12Gi
+  # Used when novnc.enabled — Gazebo GUI + RViz need more CPU/RAM
   simulationViz:
     requests:
       cpu: "5"

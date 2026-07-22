@@ -2,8 +2,8 @@ apiVersion: v2
 name: openrmf-airport
 description: OpenRMF airport terminal demo on OpenShift (large map + fleet monitor + patrol dispatch)
 type: application
-version: 0.2.0
-appVersion: "humble"
+version: 0.3.0
+appVersion: "jazzy"
 dependencies:
   - name: openrmf-lib
     version: 0.2.0

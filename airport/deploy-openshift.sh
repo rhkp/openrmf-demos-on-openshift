@@ -64,14 +64,24 @@ RMF_IMAGE="$("${ROOT_DIR}/common/scripts/read-helm-image.sh" "${VALUES_FILE}")"
 echo ""
 echo "Airport demo ready (image: ${RMF_IMAGE}). Useful commands:"
 echo "  helm status ${RELEASE_NAME} -n ${NAMESPACE}"
+echo ""
+echo "Zenoh Router:"
+echo "  oc logs -f deployment/${RELEASE_NAME}-zenoh-router -n ${NAMESPACE}"
+echo ""
+echo "Simulation Pod:"
 echo "  oc logs -f deployment/${RELEASE_NAME} -n ${NAMESPACE} -c simulation"
 echo "  oc logs -f deployment/${RELEASE_NAME} -n ${NAMESPACE} -c fleet-monitor"
 echo "  oc logs -f deployment/${RELEASE_NAME} -n ${NAMESPACE} -c task-dispatch"
 echo "  oc rsh deployment/${RELEASE_NAME} -n ${NAMESPACE} -c simulation"
+echo ""
+echo "RMF Web Pod:"
+echo "  oc logs -f deployment/${RELEASE_NAME}-rmf-web -n ${NAMESPACE} -c rmf-api-server"
+echo "  oc logs -f deployment/${RELEASE_NAME}-rmf-web -n ${NAMESPACE} -c rmf-dashboard"
 
-RMF_WEB_ENABLED="$(awk '/^rmfWeb:/{found=1; next} found && /^novnc:/{exit} found && /^  enabled:/{print $2; exit}' "${VALUES_FILE}")"
+RMF_WEB_ENABLED="$(awk '/^rmfWeb:/{found=1; next} found && /^novnc:/{exit} found && /^[[:space:]]+enabled:/{print $2; exit}' "${VALUES_FILE}")"
+NOVNC_ENABLED="$(awk '/^novnc:/{found=1; next} found && /^[[:space:]]+enabled:/{print $2; exit}' "${VALUES_FILE}")"
+
 RMF_WEB_ROUTES_ENABLED="$(awk '/^rmfWeb:/{found=1; next} found && /^novnc:/{exit} found && /^  routes:/{r=1; next} r && /^    enabled:/{print $2; exit}' "${VALUES_FILE}")"
-NOVNC_ENABLED="$(awk '/^novnc:/{found=1; next} found && /^[a-zA-Z]/ && !/^  /{exit} found && /^  enabled:/{print $2; exit}' "${VALUES_FILE}")"
 NOVNC_ROUTES_ENABLED="$(awk '/^novnc:/{found=1; next} found && /^[a-zA-Z]/ && !/^  /{exit} found && /^  routes:/{r=1; next} r && /^    enabled:/{print $2; exit}' "${VALUES_FILE}")"
 
 if [[ "${RMF_WEB_ENABLED}" == "true" && "${RMF_WEB_ROUTES_ENABLED}" == "true" ]]; then
@@ -87,6 +97,12 @@ if [[ "${NOVNC_ENABLED}" == "true" && "${NOVNC_ROUTES_ENABLED}" == "true" ]]; th
   NOVNC_HOST="$(awk '/^novnc:/{found=1; next} found && /^[[:space:]]+novncHost:/{print $2; exit}' "${VALUES_FILE}")"
   NOVNC_HOST="${NOVNC_HOST:-${RELEASE_NAME}-novnc-${NAMESPACE}}"
   echo "noVNC (Gazebo/RViz): https://${NOVNC_HOST}.${NOVNC_DOMAIN}"
+fi
+
+if [[ "${RMF_WEB_ROUTES_ENABLED}" != "true" || "${NOVNC_ROUTES_ENABLED}" != "true" ]]; then
+  echo ""
+  echo "Port-forward (routes disabled):"
+  echo "  ./airport/port-forward.sh ${NAMESPACE} ${RELEASE_NAME}"
 fi
 
 echo ""
