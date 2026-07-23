@@ -1,3 +1,5 @@
 {{- if .Values.rmfWeb.enabled }}
+{{ include "openrmf.lib.rmfWeb.deployment" (list .) }}
+---
 {{ include "openrmf.lib.rmfWeb.manifests" (list .) }}
 {{- end }}
