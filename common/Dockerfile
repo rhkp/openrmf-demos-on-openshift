@@ -53,15 +53,17 @@ RUN MODELS_DIR="${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models
       ln -sf "../${name}" "${MODELS_DIR}/Open-RMF/${name}"; \
     done
 
-# 6. Copy shared helper scripts
+# 6. Copy shared helper scripts and launch files for robot-as-pod architecture
 COPY common/scripts/ /opt/rmf/scripts/
+COPY common/launch/ /opt/rmf/demos/common/launch/
 
 # 7. Copy per-demo scripts (add a COPY line when introducing a new demo)
 COPY office/scripts/ /opt/rmf/demos/office/scripts/
 COPY hotel/scripts/ /opt/rmf/demos/hotel/scripts/
 COPY airport/scripts/ /opt/rmf/demos/airport/scripts/
 
-RUN find /opt/rmf/scripts /opt/rmf/demos -name '*.sh' -exec chmod +x {} +
+RUN find /opt/rmf/scripts /opt/rmf/demos -name '*.sh' -exec chmod +x {} + && \
+    chmod +x /opt/rmf/scripts/wait-for-world.sh
 
 # 8. OpenShift UID/GID pattern:
 #    - USER 1001 for local non-root runs

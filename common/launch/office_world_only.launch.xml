@@ -1,0 +1,34 @@
+<?xml version='1.0' ?>
+
+<launch>
+  <!-- Office world-only launch for robot-as-pod architecture.
+       This runs everything from office.launch.xml EXCEPT the fleet adapter,
+       which runs in separate robot pods instead. -->
+
+  <arg name="use_sim_time" default="true"/>
+  <arg name="failover_mode" default="false"/>
+  <arg name="gazebo_version" default='8'/>
+  <arg name="sim_update_rate" default='100'/>
+  <arg name="headless" default="1"/>
+  <arg name="server_uri" default="" description="The URI of the api server to transmit state and task information."/>
+
+  <!-- Core RMF services (from common.launch.xml) — traffic, map, viz, doors, lifts, dispatcher -->
+  <include file="$(find-pkg-share rmf_demos)/common.launch.xml">
+    <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    <arg name="viz_config_file" value="$(find-pkg-share rmf_demos)/include/office/office.rviz"/>
+    <arg name="config_file" value="$(find-pkg-share rmf_demos_maps)/office/office.building.yaml"/>
+    <arg name="headless" value="$(var headless)"/>
+    <arg name="server_uri" value="$(var server_uri)"/>
+  </include>
+
+  <!-- Gazebo simulation (world + clock bridge) -->
+  <include file="$(find-pkg-share rmf_demos_gz)/simulation.launch.xml">
+    <arg name="map_name" value="office"/>
+    <arg name="headless" value="$(var headless)"/>
+    <arg name="gazebo_version" value="$(var gazebo_version)"/>
+    <arg name="sim_update_rate" value="$(var sim_update_rate)"/>
+  </include>
+
+  <!-- NOTE: fleet adapter is NOT included here — it runs in separate robot pods -->
+
+</launch>

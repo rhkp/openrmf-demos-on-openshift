@@ -27,9 +27,30 @@ demo:
   name: office
   launchFile: office.launch.xml
 
+# Robot-as-individual-pod architecture configuration
+# When enabled, each robot runs as a separate Kubernetes pod with its own fleet adapter.
+# The simulation pod runs world-only (no fleet adapter).
+robots:
+  enabled: false  # Set to true to enable robot-as-pod architecture
+  fleet_name: "tinyRobot"
+  instances:
+    - name: tinyRobot1
+    - name: tinyRobot2
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
 dispatch:
   command: /opt/rmf/demos/office/scripts/dispatch-task.sh
   readyWaitSeconds: 30
+  robotMode:
+    enabled: true
+    command: /opt/rmf/demos/office/scripts/dispatch-task-robot-mode.sh
+    readyWaitSeconds: 60
 
 # RMF Web — 2D dashboard (map, robots, tasks) via OpenShift Routes
 rmfWeb:
@@ -137,3 +158,18 @@ resources:
     limits:
       cpu: "1"
       memory: 1Gi
+  # When robots.enabled=true, simulation becomes world-only with reduced resources
+  simulationWorldOnly:
+    requests:
+      cpu: "1"
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  simulationWorldOnlyViz:
+    requests:
+      cpu: "2"
+      memory: 3Gi
+    limits:
+      cpu: "3"
+      memory: 5Gi

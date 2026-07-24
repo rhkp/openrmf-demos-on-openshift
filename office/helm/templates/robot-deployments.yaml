@@ -1,0 +1,93 @@
+{{- if .Values.robots.enabled }}
+{{- $root := . }}
+{{- range .Values.robots.instances }}
+{{- $robotName := .name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openrmf-office.fullname" $root }}-robot-{{ $robotName | lower }}
+  namespace: {{ $root.Values.namespace.name }}
+  labels:
+    {{- include "openrmf-office.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: robot
+    rmf.openrobotics.org/robot: {{ $robotName | lower }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "openrmf.lib.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: robot
+      rmf.openrobotics.org/robot: {{ $robotName | lower }}
+  template:
+    metadata:
+      labels:
+        {{- include "openrmf.lib.selectorLabels" $root | nindent 8 }}
+        app.kubernetes.io/component: robot
+        rmf.openrobotics.org/robot: {{ $robotName | lower }}
+        rmf.openrobotics.org/demo: {{ $root.Values.demo.name }}
+        rmf.openrobotics.org/fleet: {{ $root.Values.robots.fleet_name }}
+    spec:
+      serviceAccountName: {{ include "openrmf-office.serviceAccountName" $root }}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ $root.Values.shm.sizeLimit }}
+        - name: ros-logs
+          emptyDir: {}
+        - name: rmf-scripts
+          configMap:
+            name: {{ include "openrmf-office.fullname" $root }}-scripts
+            defaultMode: 0755
+      containers:
+        - name: fleet-adapter
+          image: {{ required "image.fullRef is required" $root.Values.image.fullRef | quote }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          command: ["/opt/rmf/scripts/launch-robot.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml $root.Values.robots.resources | nindent 12 }}
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: ros-logs
+              mountPath: /opt/rmf/.ros
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/ros-env.sh
+              subPath: ros-env.sh
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/launch-robot.sh
+              subPath: launch-robot.sh
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/wait-for-world.sh
+              subPath: wait-for-world.sh
+          env:
+            - name: ROBOT_NAME
+              value: {{ $robotName | quote }}
+
+            {{- if $root.Values.rmfWeb.enabled }}
+            - name: RMF_SERVER_URI
+              value: {{ $root.Values.rmfWeb.serverUri | quote }}
+            {{- end }}
+
+            {{- if $root.Values.zenoh.enabled }}
+            - name: ZENOH_ROUTER_ENDPOINT
+              value: {{ printf "tcp/%s-zenoh-router:%v" (include "openrmf-office.fullname" $root) $root.Values.zenoh.port | quote }}
+            {{- end }}
+
+            - name: QT_QPA_PLATFORM
+              value: offscreen
+            - name: LIBGL_ALWAYS_SOFTWARE
+              value: "1"
+{{- end }}
+{{- end }}

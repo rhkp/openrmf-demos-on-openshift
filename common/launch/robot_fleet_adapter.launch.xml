@@ -1,0 +1,19 @@
+<?xml version='1.0' ?>
+
+<launch>
+  <!-- Individual robot fleet adapter for robot-as-pod architecture.
+       This runs the tinyRobot fleet adapter that was originally inside
+       office.launch.xml, but now runs in its own pod per robot. -->
+
+  <arg name="use_sim_time" default="true"/>
+  <arg name="server_uri" default="" description="The URI of the api server to transmit state and task information."/>
+
+  <!-- TinyRobot fleet adapter — same as what office.launch.xml includes -->
+  <include file="$(find-pkg-share rmf_demos_fleet_adapter)/launch/fleet_adapter.launch.xml">
+    <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    <arg name="nav_graph_file" value="$(find-pkg-share rmf_demos_maps)/maps/office/nav_graphs/0.yaml"/>
+    <arg name="config_file" value="$(find-pkg-share rmf_demos)/config/office/tinyRobot_config.yaml"/>
+    <arg name="server_uri" value="$(var server_uri)"/>
+  </include>
+
+</launch>

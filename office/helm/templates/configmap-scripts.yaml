@@ -12,3 +12,18 @@ data:
 {{ .Files.Get "files/launch-simulation.sh" | indent 4 }}
   launch-simulation-viz.sh: |
 {{ .Files.Get "files/launch-simulation-viz.sh" | indent 4 }}
+  {{- if .Values.robots.enabled }}
+  # Robot-as-pod architecture scripts
+  launch-simulation-world-only.sh: |
+{{ .Files.Get "files/launch-simulation-world-only.sh" | indent 4 }}
+  launch-simulation-world-only-viz.sh: |
+{{ .Files.Get "files/launch-simulation-world-only-viz.sh" | indent 4 }}
+  launch-fleet-coordinator.sh: |
+{{ .Files.Get "files/launch-fleet-coordinator.sh" | indent 4 }}
+  launch-robot.sh: |
+{{ .Files.Get "files/launch-robot.sh" | indent 4 }}
+  wait-for-world.sh: |
+{{ .Files.Get "files/wait-for-world.sh" | indent 4 }}
+  dispatch-task-robot-mode.sh: |
+{{ .Files.Get "files/dispatch-task-robot-mode.sh" | indent 4 }}
+  {{- end }}

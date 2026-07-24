@@ -1,0 +1,36 @@
+<?xml version='1.0' ?>
+<launch>
+
+  <!-- Individual robot adapter for distributed pod architecture -->
+  <!-- This launch file connects a single robot to an existing world simulation -->
+
+  <!-- Robot and fleet configuration -->
+  <arg name="robot_name" default="tinyRobot1" description="Name of this specific robot"/>
+  <arg name="fleet_name" default="tinyRobot" description="Fleet that this robot belongs to"/>
+  <arg name="world_name" default="office" description="RMF world name (office, hotel, airport)"/>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="server_uri" default="ws://localhost:8000/_internal"/>
+
+  <!-- Set simulation time globally -->
+  <param name="use_sim_time" value="$(var use_sim_time)"/>
+
+  <!-- Include the standard tinyRobot adapter but with robot-specific configuration -->
+  <group>
+    <!-- TinyRobot fleet adapter for this specific robot -->
+    <include file="$(find-pkg-share rmf_demos_gz)/launch/include/adapters/tinyRobot_adapter.launch.xml">
+      <arg name="robot_name" value="$(var robot_name)"/>
+      <arg name="fleet_name" value="$(var fleet_name)"/>
+      <arg name="use_sim_time" value="$(var use_sim_time)"/>
+      <arg name="server_uri" value="$(var server_uri)"/>
+
+      <!-- Office world specific configuration -->
+      <arg name="nav_graph_file" value="$(find-pkg-share rmf_demos_maps)/office/nav_graphs/0.yaml"/>
+      <arg name="fleet_config_file" value="$(find-pkg-share rmf_demos)/config/office/$(var fleet_name)_config.yaml"/>
+
+      <!-- Robot-specific simulation model (skip if world already has the robot) -->
+      <arg name="spawn_robot_model" value="false"/>
+      <arg name="spawn_robot_name" value="$(var robot_name)"/>
+    </include>
+  </group>
+
+</launch>

@@ -1,0 +1,42 @@
+<?xml version='1.0' ?>
+<launch>
+
+  <!-- World-only simulation launch for distributed robot pod architecture -->
+  <!-- This launches the Gazebo world simulation without any robots or fleet adapters -->
+
+  <!-- World configuration -->
+  <arg name="world_file" default="office.launch.xml" description="RMF world launch file (office.launch.xml, hotel.launch.xml, etc)"/>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="headless" default="1"/>
+  <arg name="spawn_robots" default="false"/>
+  <arg name="server_uri" default="ws://localhost:8000/_internal"/>
+
+  <!-- Set simulation time globally -->
+  <param name="use_sim_time" value="$(var use_sim_time)"/>
+
+  <!-- Determine world name from launch file -->
+  <let name="world_name" value="office" if="$(eval '&quot;$(var world_file)&quot;' == 'office.launch.xml')"/>
+  <let name="world_name" value="hotel" if="$(eval '&quot;$(var world_file)&quot;' == 'hotel.launch.xml')"/>
+  <let name="world_name" value="airport" if="$(eval '&quot;$(var world_file)&quot;' == 'airport_terminal.launch.xml')"/>
+
+  <!-- Launch Gazebo with world only (no robots) -->
+  <include file="$(find-pkg-share rmf_demos_gz)/launch/include/$(var world_name)/world_only.launch.xml">
+    <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    <arg name="headless" value="$(var headless)"/>
+    <arg name="server_uri" value="$(var server_uri)"/>
+  </include>
+
+  <!-- Traffic scheduler for multi-robot coordination -->
+  <include file="$(find-pkg-share rmf_traffic_ros2)/launch/rmf_traffic_schedule.launch.xml">
+    <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    <arg name="server_uri" value="$(var server_uri)"/>
+  </include>
+
+  <!-- Building systems coordinator (doors, lifts, etc.) -->
+  <include file="$(find-pkg-share rmf_demos_gz)/launch/include/$(var world_name)/building_systems.launch.xml"
+           if="$(eval '&quot;$(var world_name)&quot;' != 'office')">
+    <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    <arg name="server_uri" value="$(var server_uri)"/>
+  </include>
+
+</launch>

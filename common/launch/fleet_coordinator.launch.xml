@@ -1,0 +1,20 @@
+<?xml version='1.0' ?>
+<launch>
+
+  <!-- Fleet coordinator for distributed robot pod architecture -->
+  <!-- Simplified version that works with standard RMF packages -->
+
+  <!-- Configuration -->
+  <arg name="world_name" default="office" description="RMF world name"/>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="server_uri" default="ws://localhost:8000/_internal"/>
+
+  <!-- Simple coordinator - just log that we're coordinating -->
+  <!-- The heavy lifting is done by individual robot adapters -->
+  <!-- and the central simulation/task dispatch -->
+
+  <node pkg="demo_nodes_py" exec="talker" name="fleet_coordinator_heartbeat" output="screen">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+</launch>
