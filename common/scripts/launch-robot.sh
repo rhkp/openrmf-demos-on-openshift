@@ -19,7 +19,7 @@ ORIGINAL_CONFIG="$(ros2 pkg prefix rmf_demos)/share/rmf_demos/config/office/tiny
 NAV_GRAPH="$(ros2 pkg prefix rmf_demos_maps)/share/rmf_demos_maps/maps/office/nav_graphs/0.yaml"
 FILTERED_CONFIG="/tmp/${ROBOT_NAME}_config.yaml"
 
-echo "[${ROBOT_NAME}] Filtering fleet config to robot [${ROBOT_NAME}]..."
+echo "[${ROBOT_NAME}] Filtering fleet config to robot [${ROBOT_NAME}] and disabling bidding..."
 python3 -c "
 import yaml, sys
 with open('${ORIGINAL_CONFIG}') as f:
@@ -29,10 +29,24 @@ robots = config.get('rmf_fleet', {}).get('robots', {})
 if robot_name not in robots:
     print(f'ERROR: robot [{robot_name}] not found in config. Available: {list(robots.keys())}', file=sys.stderr)
     sys.exit(1)
+# Filter to single robot
 config['rmf_fleet']['robots'] = {robot_name: robots[robot_name]}
+
+# DISABLE BIDDING: Set task capabilities to false so robots don't bid
+# Fleet coordinator will handle all task assignment
+config['rmf_fleet']['task_capabilities'] = {
+    'loop': False,      # Disable patrol task bidding
+    'delivery': False,  # Disable delivery task bidding
+    'actions': []       # Disable action task bidding
+}
+
+# Add environment variable to indicate non-bidding mode
+config['rmf_fleet']['bidding_enabled'] = False
+
 with open('${FILTERED_CONFIG}', 'w') as f:
     yaml.dump(config, f, default_flow_style=False)
-print(f'Wrote per-robot config for [{robot_name}] to ${FILTERED_CONFIG}')
+print(f'Wrote non-bidding config for [{robot_name}] to ${FILTERED_CONFIG}')
+print('Robot will only execute tasks assigned by fleet coordinator')
 "
 
 # Configure the local Zenoh session daemon (rmw_zenohd) to peer with the

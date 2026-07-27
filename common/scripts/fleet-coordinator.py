@@ -125,10 +125,10 @@ class FleetCoordinator(Node):
             self.robots[robot_key].update_from_fleet_state(robot_state)
 
     def bid_notice_callback(self, msg: BidNotice):
-        """Handle task assignment requests - replace bidding with coordination"""
+        """Handle task assignment requests - centralized coordination (robots don't bid)"""
         task_id = msg.task_id
 
-        self.get_logger().info(f"Received task assignment request: {task_id}")
+        self.get_logger().info(f"🎯 Fleet Coordinator received task: {task_id}")
 
         # Parse task to understand requirements
         task_info = self.parse_task_profile(msg.task_profile)
@@ -136,13 +136,14 @@ class FleetCoordinator(Node):
             self.get_logger().warn(f"Could not parse task profile for {task_id}")
             return
 
-        # Find best robot for this task
+        # Find best robot for this task using optimization criteria
         best_robot = self.select_optimal_robot(task_info)
         if not best_robot:
             self.get_logger().warn(f"No available robot for task {task_id}")
             return
 
-        # Assign task to selected robot
+        # Directly assign task to selected robot (no bidding competition)
+        self.get_logger().info(f"📋 Fleet Coordinator assigning {task_id} to {best_robot}")
         self.assign_task(task_id, best_robot, msg)
 
     def parse_task_profile(self, task_profile) -> Optional[Dict]:
@@ -211,10 +212,11 @@ class FleetCoordinator(Node):
         return best_robot
 
     def assign_task(self, task_id: str, robot_name: str, bid_notice: BidNotice):
-        """Assign task to the selected robot"""
+        """Assign task to the selected robot via coordinated response"""
         self.task_assignments[task_id] = robot_name
 
-        # Create bid response that "wins" for the selected robot
+        # Create authoritative bid response for the selected robot
+        # This bypasses competitive bidding with a coordinator decision
         response = BidResponse()
         response.task_id = task_id
         response.robot_name = robot_name.split('/')[-1]  # Just the robot name, not fleet/robot
@@ -222,13 +224,14 @@ class FleetCoordinator(Node):
         response.proposal = bid_notice.task_profile  # Echo back the task profile
         response.proposal.fleet_name = response.fleet_name
 
-        # Set a competitive cost (lower than typical bidding)
+        # Set authoritative coordinator assignment (very low cost to guarantee win)
         response.proposal.estimated_finish_time = self.get_clock().now().to_msg()
         response.proposal.estimated_finish_time.sec += 300  # Estimate 5 minutes
 
         self.bid_response_pub.publish(response)
 
-        self.get_logger().info(f"Assigned task {task_id} to robot {robot_name}")
+        self.get_logger().info(f"✅ Coordinated assignment: {task_id} → {robot_name}")
+        self.get_logger().info(f"   Reason: Optimal robot selected by fleet coordinator")
 
     def publish_status(self):
         """Publish coordinator status for monitoring"""
