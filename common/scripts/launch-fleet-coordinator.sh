@@ -3,33 +3,23 @@ set -euo pipefail
 
 source /opt/rmf/scripts/ros-env.sh
 
-# Required configuration
-: "${RMF_WORLD_NAME:?RMF_WORLD_NAME must be set (e.g. office)}"
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
+export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
 
 SERVER_URI="${RMF_SERVER_URI:-ws://localhost:8000/_internal}"
+WORLD_NAME="${RMF_WORLD_NAME:-office}"
 
-echo "[fleet-coordinator] Starting fleet coordination for ${RMF_WORLD_NAME}..."
+echo "[fleet-coordinator] Starting centralized fleet coordination for ${WORLD_NAME}..."
 echo "[fleet-coordinator] RMF server_uri=${SERVER_URI}"
+echo "[fleet-coordinator] Zenoh router: ${ZENOH_ROUTER_ENDPOINT}"
 
-# Wait for world simulation to be ready
-echo "[fleet-coordinator] Waiting for world simulation to be ready..."
+# Configure Zenoh connection to central router
+export ZENOH_CONFIG_OVERRIDE="connect/endpoints=[\"${ZENOH_ROUTER_ENDPOINT}\"];scouting/multicast/enabled=false"
+
+echo "[fleet-coordinator] Waiting for world simulation..."
 /opt/rmf/scripts/wait-for-world.sh 300
 
-# Simple fleet coordinator for distributed robot pods
-# In robot-as-pod mode, the individual robots handle their own fleet adapters
-# This coordinator primarily monitors and logs fleet status
+echo "[fleet-coordinator] Launching fleet coordinator..."
 
-echo "[fleet-coordinator] Fleet coordinator ready for ${RMF_WORLD_NAME}"
-echo "[fleet-coordinator] Monitoring fleet states..."
-
-# Simple monitoring loop - wait for fleet states topic and log activity
-while true; do
-  if ros2 topic list 2>/dev/null | grep -q "/fleet_states"; then
-    echo "[fleet-coordinator] Fleet states topic available - robots are active"
-    # Monitor fleet states periodically
-    ros2 topic echo /fleet_states --once 2>/dev/null || echo "[fleet-coordinator] Waiting for fleet state data..."
-  else
-    echo "[fleet-coordinator] Waiting for fleet states topic..."
-  fi
-  sleep 30
-done
+# Launch the Python fleet coordinator
+exec python3 /opt/rmf/scripts/fleet-coordinator.py

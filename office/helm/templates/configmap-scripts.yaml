@@ -26,4 +26,6 @@ data:
 {{ .Files.Get "files/wait-for-world.sh" | indent 4 }}
   dispatch-task-robot-mode.sh: |
 {{ .Files.Get "files/dispatch-task-robot-mode.sh" | indent 4 }}
+  fleet-coordinator.py: |
+{{ .Files.Get "files/fleet-coordinator.py" | indent 4 }}
   {{- end }}

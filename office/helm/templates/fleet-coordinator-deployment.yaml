@@ -1,0 +1,91 @@
+{{- if and .Values.robots.enabled .Values.robots.fleetCoordinator.enabled }}
+# Fleet Coordinator pod — centralized task assignment and fleet optimization
+# Monitors all robot pods and coordinates task distribution
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openrmf-office.fullname" . }}-fleet-coordinator
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "openrmf-office.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fleet-coordinator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "openrmf.lib.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: fleet-coordinator
+  template:
+    metadata:
+      labels:
+        {{- include "openrmf.lib.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: fleet-coordinator
+        rmf.openrobotics.org/demo: {{ .Values.demo.name }}
+        rmf.openrobotics.org/fleet: {{ .Values.robots.fleet_name }}
+    spec:
+      serviceAccountName: {{ include "openrmf-office.serviceAccountName" . }}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ .Values.shm.sizeLimit }}
+        - name: ros-logs
+          emptyDir: {}
+        - name: rmf-scripts
+          configMap:
+            name: {{ include "openrmf-office.fullname" . }}-scripts
+            defaultMode: 0755
+      containers:
+        - name: fleet-coordinator
+          image: {{ required "image.fullRef is required" .Values.image.fullRef | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/opt/rmf/scripts/launch-fleet-coordinator.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.robots.fleetCoordinator.resources | nindent 12 }}
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: ros-logs
+              mountPath: /opt/rmf/.ros
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/ros-env.sh
+              subPath: ros-env.sh
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/launch-fleet-coordinator.sh
+              subPath: launch-fleet-coordinator.sh
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/fleet-coordinator.py
+              subPath: fleet-coordinator.py
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/wait-for-world.sh
+              subPath: wait-for-world.sh
+          env:
+            - name: RMF_WORLD_NAME
+              value: {{ .Values.demo.name | quote }}
+
+            {{- if .Values.rmfWeb.enabled }}
+            - name: RMF_SERVER_URI
+              value: {{ .Values.rmfWeb.serverUri | quote }}
+            {{- end }}
+
+            {{- if .Values.zenoh.enabled }}
+            - name: ZENOH_ROUTER_ENDPOINT
+              value: {{ printf "tcp/%s-zenoh-router:%v" (include "openrmf-office.fullname" .) .Values.zenoh.port | quote }}
+            {{- end }}
+
+            - name: QT_QPA_PLATFORM
+              value: offscreen
+            - name: LIBGL_ALWAYS_SOFTWARE
+              value: "1"
+{{- end }}

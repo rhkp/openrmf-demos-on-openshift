@@ -43,6 +43,16 @@ robots:
     limits:
       cpu: "2"
       memory: "4Gi"
+  # Fleet coordinator for centralized task assignment
+  fleetCoordinator:
+    enabled: true  # Deploy fleet coordinator when robots.enabled=true
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
 
 dispatch:
   command: /opt/rmf/demos/office/scripts/dispatch-task.sh
