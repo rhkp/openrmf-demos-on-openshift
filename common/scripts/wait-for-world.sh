@@ -24,7 +24,7 @@ while true; do
   # Check if all required topics are available
   all_topics_ready=true
   for topic in "${REQUIRED_TOPICS[@]}"; do
-    if ! ros2 topic list 2>/dev/null | grep -Fxq "${topic}"; then
+    if ! timeout 10 ros2 topic list 2>/dev/null | grep -Fxq "${topic}"; then
       all_topics_ready=false
       break
     fi

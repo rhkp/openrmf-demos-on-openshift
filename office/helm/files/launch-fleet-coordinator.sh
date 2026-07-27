@@ -16,8 +16,19 @@ echo "[fleet-coordinator] Zenoh router: ${ZENOH_ROUTER_ENDPOINT}"
 # Configure Zenoh connection to central router
 export ZENOH_CONFIG_OVERRIDE="connect/endpoints=[\"${ZENOH_ROUTER_ENDPOINT}\"];scouting/multicast/enabled=false"
 
-echo "[fleet-coordinator] Waiting for world simulation..."
-/opt/rmf/scripts/wait-for-world.sh 300
+echo "[fleet-coordinator] Waiting for essential topics..."
+# Fleet coordinator only needs /clock and /fleet_states, not /tf topics
+timeout=60
+elapsed=0
+while [[ $elapsed -lt $timeout ]]; do
+  if ros2 topic list 2>/dev/null | grep -q "/clock"; then
+    echo "[fleet-coordinator] Essential topics available"
+    break
+  fi
+  echo "[fleet-coordinator] Still waiting for topics... (${elapsed}s elapsed)"
+  sleep 5
+  elapsed=$((elapsed + 5))
+done
 
 echo "[fleet-coordinator] Launching fleet coordinator..."
 
