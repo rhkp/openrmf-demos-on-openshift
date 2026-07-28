@@ -1,0 +1,93 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="robot_name" description="Name of the robot (e.g., tinyRobot1)" />
+  <arg name="use_sim_time" default="true" />
+  <arg name="nav2_params_file" default="/opt/rmf/config/nav2_params.yaml" />
+  <arg name="slam_params_file" default="/opt/rmf/config/slam_toolbox_params.yaml" />
+
+  <!-- Launch Nav2 navigation stack -->
+  <group>
+    <push-ros-namespace namespace="$(var robot_name)" />
+
+    <!-- Controller Server -->
+    <node pkg="nav2_controller" exec="controller_server" output="screen">
+      <param from="$(var nav2_params_file)" />
+      <param name="use_sim_time" value="$(var use_sim_time)" />
+      <remap from="/tf" to="/tf" />
+      <remap from="/tf_static" to="/tf_static" />
+    </node>
+
+    <!-- Smoother Server -->
+    <node pkg="nav2_smoother" exec="smoother_server" output="screen">
+      <param from="$(var nav2_params_file)" />
+      <param name="use_sim_time" value="$(var use_sim_time)" />
+      <remap from="/tf" to="/tf" />
+      <remap from="/tf_static" to="/tf_static" />
+    </node>
+
+    <!-- Planner Server -->
+    <node pkg="nav2_planner" exec="planner_server" output="screen">
+      <param from="$(var nav2_params_file)" />
+      <param name="use_sim_time" value="$(var use_sim_time)" />
+      <remap from="/tf" to="/tf" />
+      <remap from="/tf_static" to="/tf_static" />
+    </node>
+
+    <!-- Behavior Server -->
+    <node pkg="nav2_behaviors" exec="behavior_server" output="screen">
+      <param from="$(var nav2_params_file)" />
+      <param name="use_sim_time" value="$(var use_sim_time)" />
+      <remap from="/tf" to="/tf" />
+      <remap from="/tf_static" to="/tf_static" />
+    </node>
+
+    <!-- BT Navigator -->
+    <node pkg="nav2_bt_navigator" exec="bt_navigator" output="screen">
+      <param from="$(var nav2_params_file)" />
+      <param name="use_sim_time" value="$(var use_sim_time)" />
+      <remap from="/tf" to="/tf" />
+      <remap from="/tf_static" to="/tf_static" />
+    </node>
+
+    <!-- Waypoint Follower -->
+    <node pkg="nav2_waypoint_follower" exec="waypoint_follower" output="screen">
+      <param from="$(var nav2_params_file)" />
+      <param name="use_sim_time" value="$(var use_sim_time)" />
+      <remap from="/tf" to="/tf" />
+      <remap from="/tf_static" to="/tf_static" />
+    </node>
+
+    <!-- Velocity Smoother -->
+    <node pkg="nav2_velocity_smoother" exec="velocity_smoother" output="screen">
+      <param from="$(var nav2_params_file)" />
+      <param name="use_sim_time" value="$(var use_sim_time)" />
+      <remap from="/tf" to="/tf" />
+      <remap from="/tf_static" to="/tf_static" />
+    </node>
+
+    <!-- Lifecycle Manager for Nav2 -->
+    <node pkg="nav2_lifecycle_manager" exec="lifecycle_manager" name="lifecycle_manager_navigation" output="screen">
+      <param name="use_sim_time" value="$(var use_sim_time)" />
+      <param name="autostart" value="true" />
+      <param name="node_names" value="['controller_server',
+                                        'smoother_server',
+                                        'planner_server',
+                                        'behavior_server',
+                                        'bt_navigator',
+                                        'waypoint_follower',
+                                        'velocity_smoother']" />
+    </node>
+  </group>
+
+  <!-- Launch SLAM Toolbox -->
+  <group>
+    <push-ros-namespace namespace="$(var robot_name)" />
+
+    <node pkg="slam_toolbox" exec="sync_slam_toolbox_node" name="slam_toolbox" output="screen">
+      <param from="$(var slam_params_file)" />
+      <param name="use_sim_time" value="$(var use_sim_time)" />
+      <remap from="/tf" to="/tf" />
+      <remap from="/tf_static" to="/tf_static" />
+    </node>
+  </group>
+</launch>

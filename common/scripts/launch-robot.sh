@@ -67,11 +67,35 @@ export ZENOH_CONFIG_OVERRIDE="connect/endpoints=[\"tcp/localhost:7447\"];scoutin
 echo "[${ROBOT_NAME}] Waiting for world simulation topics..."
 /opt/rmf/scripts/wait-for-world.sh 300
 
-echo "[${ROBOT_NAME}] World ready — launching fleet adapter for robot [${ROBOT_NAME}]..."
+echo "[${ROBOT_NAME}] World ready — launching nav2 + fleet adapter for robot [${ROBOT_NAME}]..."
+
+# Launch Nav2 navigation stack with SLAM
+echo "[${ROBOT_NAME}] Starting Nav2 navigation stack..."
+ros2 launch /opt/rmf/demos/common/launch/nav2_robot.launch.xml \
+  robot_name:="${ROBOT_NAME}" \
+  use_sim_time:=true &
+NAV2_PID=$!
+
+# Start RMF-Nav2 bridge
+echo "[${ROBOT_NAME}] Starting RMF-Nav2 bridge..."
+python3 /opt/rmf/scripts/rmf_nav2_bridge.py \
+  --robot_name "${ROBOT_NAME}" \
+  --fleet_name "tinyRobot" &
+BRIDGE_PID=$!
+
+# Update cleanup function
+cleanup() {
+  echo "[${ROBOT_NAME}] Cleaning up nav2, bridge, and zenoh daemon..."
+  kill ${NAV2_PID} 2>/dev/null || true
+  kill ${BRIDGE_PID} 2>/dev/null || true
+  kill ${ZENOHD_PID} 2>/dev/null || true
+}
+trap cleanup EXIT
 
 # Find upstream fleet_adapter launch file and invoke with per-robot config
 FLEET_ADAPTER_LAUNCH="$(ros2 pkg prefix rmf_demos_fleet_adapter)/share/rmf_demos_fleet_adapter/launch/fleet_adapter.launch.xml"
 
+# Launch fleet adapter (this blocks)
 exec ros2 launch "${FLEET_ADAPTER_LAUNCH}" \
   use_sim_time:=true \
   "nav_graph_file:=${NAV_GRAPH}" \

@@ -1,0 +1,221 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="TinyRobot">
+    <pose>0 0 0 0 0 0</pose>
+
+    <!-- Robot base link -->
+    <link name="base_link">
+      <pose>0 0 0.1 0 0 0</pose>
+      <inertial>
+        <mass>1.0</mass>
+        <inertia>
+          <ixx>0.01</ixx>
+          <iyy>0.01</iyy>
+          <izz>0.01</izz>
+        </inertia>
+      </inertial>
+
+      <visual name="base_visual">
+        <geometry>
+          <box>
+            <size>0.3 0.3 0.2</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>0.2 0.2 0.2 1</ambient>
+          <diffuse>0.3 0.3 0.3 1</diffuse>
+        </material>
+      </visual>
+
+      <collision name="base_collision">
+        <geometry>
+          <box>
+            <size>0.3 0.3 0.2</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Lidar link -->
+    <link name="lidar_link">
+      <pose>0 0 0.25 0 0 0</pose>
+      <inertial>
+        <mass>0.1</mass>
+        <inertia>
+          <ixx>0.001</ixx>
+          <iyy>0.001</iyy>
+          <izz>0.001</izz>
+        </inertia>
+      </inertial>
+
+      <visual name="lidar_visual">
+        <geometry>
+          <cylinder>
+            <radius>0.05</radius>
+            <length>0.1</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>0.1 0.1 0.1 1</ambient>
+          <diffuse>0.2 0.2 0.2 1</diffuse>
+        </material>
+      </visual>
+
+      <collision name="lidar_collision">
+        <geometry>
+          <cylinder>
+            <radius>0.05</radius>
+            <length>0.1</length>
+          </cylinder>
+        </geometry>
+      </collision>
+
+      <!-- 2D Lidar sensor -->
+      <sensor name="lidar" type="ray">
+        <pose>0 0 0.05 0 0 0</pose>
+        <always_on>true</always_on>
+        <update_rate>10</update_rate>
+        <visualize>true</visualize>
+
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>360</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159</min_angle>
+              <max_angle>3.14159</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.1</min>
+            <max>10.0</max>
+            <resolution>0.01</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.01</stddev>
+          </noise>
+        </ray>
+
+        <plugin name="gazebo_ros_ray" filename="libgazebo_ros_ray.so">
+          <ros>
+            <namespace></namespace>
+            <argument>~/out:=scan</argument>
+          </ros>
+          <output_type>sensor_msgs/LaserScan</output_type>
+          <frame_name>lidar_link</frame_name>
+        </plugin>
+      </sensor>
+    </link>
+
+    <!-- Joint connecting base to lidar -->
+    <joint name="lidar_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>lidar_link</child>
+    </joint>
+
+    <!-- Differential drive plugin for movement -->
+    <plugin name="differential_drive" filename="libgazebo_ros_diff_drive.so">
+      <ros>
+        <namespace></namespace>
+        <argument>cmd_vel:=cmd_vel</argument>
+        <argument>odom:=odom</argument>
+      </ros>
+
+      <!-- Wheel configuration -->
+      <left_joint>left_wheel_joint</left_joint>
+      <right_joint>right_wheel_joint</right_joint>
+
+      <wheel_separation>0.25</wheel_separation>
+      <wheel_diameter>0.1</wheel_diameter>
+
+      <!-- Kinematics -->
+      <max_wheel_torque>200</max_wheel_torque>
+      <max_wheel_acceleration>10.0</max_wheel_acceleration>
+
+      <!-- Output -->
+      <publish_odom>true</publish_odom>
+      <publish_odom_tf>true</publish_odom_tf>
+      <publish_wheel_tf>true</publish_wheel_tf>
+
+      <odometry_frame>odom</odometry_frame>
+      <robot_base_frame>base_link</robot_base_frame>
+    </plugin>
+
+    <!-- Left wheel -->
+    <link name="left_wheel">
+      <pose>-0.1 0.125 0.05 1.5708 0 0</pose>
+      <inertial>
+        <mass>0.5</mass>
+        <inertia>
+          <ixx>0.01</ixx>
+          <iyy>0.01</iyy>
+          <izz>0.01</izz>
+        </inertia>
+      </inertial>
+      <visual name="left_wheel_visual">
+        <geometry>
+          <cylinder>
+            <radius>0.05</radius>
+            <length>0.05</length>
+          </cylinder>
+        </geometry>
+      </visual>
+      <collision name="left_wheel_collision">
+        <geometry>
+          <cylinder>
+            <radius>0.05</radius>
+            <length>0.05</length>
+          </cylinder>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Right wheel -->
+    <link name="right_wheel">
+      <pose>-0.1 -0.125 0.05 1.5708 0 0</pose>
+      <inertial>
+        <mass>0.5</mass>
+        <inertia>
+          <ixx>0.01</ixx>
+          <iyy>0.01</iyy>
+          <izz>0.01</izz>
+        </inertia>
+      </inertial>
+      <visual name="right_wheel_visual">
+        <geometry>
+          <cylinder>
+            <radius>0.05</radius>
+            <length>0.05</length>
+          </cylinder>
+        </geometry>
+      </visual>
+      <collision name="right_wheel_collision">
+        <geometry>
+          <cylinder>
+            <radius>0.05</radius>
+            <length>0.05</length>
+          </cylinder>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Wheel joints -->
+    <joint name="left_wheel_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>left_wheel</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+      </axis>
+    </joint>
+
+    <joint name="right_wheel_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>right_wheel</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+      </axis>
+    </joint>
+  </model>
+</sdf>
