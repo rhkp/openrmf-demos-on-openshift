@@ -5,89 +5,34 @@
   <arg name="nav2_params_file" default="/opt/rmf/config/nav2_params.yaml" />
   <arg name="slam_params_file" default="/opt/rmf/config/slam_toolbox_params.yaml" />
 
-  <!-- Launch Nav2 navigation stack -->
   <group>
     <push-ros-namespace namespace="$(var robot_name)" />
 
-    <!-- Controller Server -->
-    <node pkg="nav2_controller" exec="controller_server" output="screen">
-      <param from="$(var nav2_params_file)" />
-      <param name="use_sim_time" value="$(var use_sim_time)" />
-      <remap from="/tf" to="/tf" />
-      <remap from="/tf_static" to="/tf_static" />
-    </node>
+    <!-- Nav2 navigation stack (RewrittenYaml wraps params under namespace) -->
+    <include file="$(find-pkg-share nav2_bringup)/launch/navigation_launch.py">
+      <arg name="namespace" value="$(var robot_name)" />
+      <arg name="use_sim_time" value="$(var use_sim_time)" />
+      <arg name="params_file" value="$(var nav2_params_file)" />
+      <arg name="autostart" value="true" />
+      <arg name="use_composition" value="False" />
+    </include>
 
-    <!-- Smoother Server -->
-    <node pkg="nav2_smoother" exec="smoother_server" output="screen">
-      <param from="$(var nav2_params_file)" />
-      <param name="use_sim_time" value="$(var use_sim_time)" />
-      <remap from="/tf" to="/tf" />
-      <remap from="/tf_static" to="/tf_static" />
-    </node>
-
-    <!-- Planner Server -->
-    <node pkg="nav2_planner" exec="planner_server" output="screen">
-      <param from="$(var nav2_params_file)" />
-      <param name="use_sim_time" value="$(var use_sim_time)" />
-      <remap from="/tf" to="/tf" />
-      <remap from="/tf_static" to="/tf_static" />
-    </node>
-
-    <!-- Behavior Server -->
-    <node pkg="nav2_behaviors" exec="behavior_server" output="screen">
-      <param from="$(var nav2_params_file)" />
-      <param name="use_sim_time" value="$(var use_sim_time)" />
-      <remap from="/tf" to="/tf" />
-      <remap from="/tf_static" to="/tf_static" />
-    </node>
-
-    <!-- BT Navigator -->
-    <node pkg="nav2_bt_navigator" exec="bt_navigator" output="screen">
-      <param from="$(var nav2_params_file)" />
-      <param name="use_sim_time" value="$(var use_sim_time)" />
-      <remap from="/tf" to="/tf" />
-      <remap from="/tf_static" to="/tf_static" />
-    </node>
-
-    <!-- Waypoint Follower -->
-    <node pkg="nav2_waypoint_follower" exec="waypoint_follower" output="screen">
-      <param from="$(var nav2_params_file)" />
-      <param name="use_sim_time" value="$(var use_sim_time)" />
-      <remap from="/tf" to="/tf" />
-      <remap from="/tf_static" to="/tf_static" />
-    </node>
-
-    <!-- Velocity Smoother -->
-    <node pkg="nav2_velocity_smoother" exec="velocity_smoother" output="screen">
-      <param from="$(var nav2_params_file)" />
-      <param name="use_sim_time" value="$(var use_sim_time)" />
-      <remap from="/tf" to="/tf" />
-      <remap from="/tf_static" to="/tf_static" />
-    </node>
-
-    <!-- Lifecycle Manager for Nav2 -->
-    <node pkg="nav2_lifecycle_manager" exec="lifecycle_manager" name="lifecycle_manager_navigation" output="screen">
-      <param name="use_sim_time" value="$(var use_sim_time)" />
-      <param name="autostart" value="true" />
-      <param name="node_names" value="['controller_server',
-                                        'smoother_server',
-                                        'planner_server',
-                                        'behavior_server',
-                                        'bt_navigator',
-                                        'waypoint_follower',
-                                        'velocity_smoother']" />
-    </node>
-  </group>
-
-  <!-- Launch SLAM Toolbox -->
-  <group>
-    <push-ros-namespace namespace="$(var robot_name)" />
-
+    <!-- SLAM Toolbox -->
     <node pkg="slam_toolbox" exec="sync_slam_toolbox_node" name="slam_toolbox" output="screen">
       <param from="$(var slam_params_file)" />
       <param name="use_sim_time" value="$(var use_sim_time)" />
-      <remap from="/tf" to="/tf" />
-      <remap from="/tf_static" to="/tf_static" />
+      <remap from="/tf" to="tf" />
+      <remap from="/tf_static" to="tf_static" />
+    </node>
+
+    <!-- Lifecycle manager for SLAM Toolbox (sync_slam_toolbox_node is a lifecycle node).
+         bond_timeout=0 because SLAM Toolbox uses rclcpp_lifecycle directly, not nav2_util::LifecycleNode,
+         so it doesn't create a bond. -->
+    <node pkg="nav2_lifecycle_manager" exec="lifecycle_manager" name="lifecycle_manager_slam" output="screen">
+      <param name="use_sim_time" value="$(var use_sim_time)" />
+      <param name="autostart" value="true" />
+      <param name="bond_timeout" value="0.0" />
+      <param name="node_names" value="['slam_toolbox']" />
     </node>
   </group>
 </launch>

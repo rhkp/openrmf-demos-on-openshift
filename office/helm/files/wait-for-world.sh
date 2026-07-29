@@ -3,17 +3,10 @@
 set -euo pipefail
 
 TIMEOUT="${1:-300}"
-INTERVAL="${WAIT_INTERVAL:-5}"
+INTERVAL="${WAIT_INTERVAL:-10}"
 
 echo "[wait-world] Waiting for Gazebo world simulation (timeout ${TIMEOUT}s)..."
 elapsed=0
-
-# Wait for essential world topics to be available
-REQUIRED_TOPICS=(
-  "/clock"
-  "/tf"
-  "/tf_static"
-)
 
 while true; do
   if (( elapsed >= TIMEOUT )); then
@@ -21,16 +14,13 @@ while true; do
     exit 1
   fi
 
-  # Check if all required topics are available
-  all_topics_ready=true
-  for topic in "${REQUIRED_TOPICS[@]}"; do
-    if ! timeout 10 ros2 topic list 2>/dev/null | grep -Fxq "${topic}"; then
-      all_topics_ready=false
-      break
-    fi
-  done
+  # Single ros2 topic list call with generous timeout for Zenoh discovery,
+  # then check all required topics at once from the captured output
+  TOPIC_LIST=$(timeout 30 ros2 topic list 2>/dev/null || true)
 
-  if [[ "${all_topics_ready}" == "true" ]]; then
+  if echo "${TOPIC_LIST}" | grep -Fxq "/clock" && \
+     echo "${TOPIC_LIST}" | grep -Fxq "/tf" && \
+     echo "${TOPIC_LIST}" | grep -Fxq "/tf_static"; then
     echo "[wait-world] Gazebo world simulation is ready."
     break
   fi

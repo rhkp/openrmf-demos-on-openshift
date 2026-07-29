@@ -67,25 +67,47 @@ export ZENOH_CONFIG_OVERRIDE="connect/endpoints=[\"tcp/localhost:7447\"];scoutin
 echo "[${ROBOT_NAME}] Waiting for world simulation topics..."
 /opt/rmf/scripts/wait-for-world.sh 300
 
-echo "[${ROBOT_NAME}] World ready — launching nav2 + fleet adapter for robot [${ROBOT_NAME}]..."
+echo "[${ROBOT_NAME}] World ready -- launching nav2 + fleet adapter for robot [${ROBOT_NAME}]..."
+
+# Generate per-robot Nav2 params: replace ROBOT_PLACEHOLDER with actual robot name
+NAV2_PARAMS="/tmp/${ROBOT_NAME}_nav2_params.yaml"
+SLAM_PARAMS="/tmp/${ROBOT_NAME}_slam_params.yaml"
+sed "s/ROBOT_PLACEHOLDER/${ROBOT_NAME}/g" /opt/rmf/config/nav2_params.yaml > "${NAV2_PARAMS}"
+sed "s/ROBOT_PLACEHOLDER/${ROBOT_NAME}/g" /opt/rmf/config/slam_toolbox_params.yaml > "${SLAM_PARAMS}"
+echo "[${ROBOT_NAME}] Generated per-robot params: ${NAV2_PARAMS}, ${SLAM_PARAMS}"
+
+# Start TF publisher for Nav2/SLAM frame chain
+echo "[${ROBOT_NAME}] Starting Nav2 TF publisher..."
+python3 /opt/rmf/scripts/nav2_tf_publisher.py --ros-args \
+  -p robot_name:="${ROBOT_NAME}" \
+  -p fleet_name:="tinyRobot" \
+  -p use_sim_time:=true \
+  --remap /tf:=/"${ROBOT_NAME}"/tf \
+  --remap /tf_static:=/"${ROBOT_NAME}"/tf_static &
+TF_PUB_PID=$!
+
+sleep 2
 
 # Launch Nav2 navigation stack with SLAM
 echo "[${ROBOT_NAME}] Starting Nav2 navigation stack..."
 ros2 launch /opt/rmf/demos/common/launch/nav2_robot.launch.xml \
   robot_name:="${ROBOT_NAME}" \
-  use_sim_time:=true &
+  use_sim_time:=true \
+  nav2_params_file:="${NAV2_PARAMS}" \
+  slam_params_file:="${SLAM_PARAMS}" &
 NAV2_PID=$!
 
 # Start RMF-Nav2 bridge
 echo "[${ROBOT_NAME}] Starting RMF-Nav2 bridge..."
-python3 /opt/rmf/scripts/rmf_nav2_bridge.py \
-  --robot_name "${ROBOT_NAME}" \
-  --fleet_name "tinyRobot" &
+python3 /opt/rmf/scripts/rmf_nav2_bridge.py --ros-args \
+  -p robot_name:="${ROBOT_NAME}" \
+  -p fleet_name:="tinyRobot" &
 BRIDGE_PID=$!
 
 # Update cleanup function
 cleanup() {
-  echo "[${ROBOT_NAME}] Cleaning up nav2, bridge, and zenoh daemon..."
+  echo "[${ROBOT_NAME}] Cleaning up tf_publisher, nav2, bridge, and zenoh daemon..."
+  kill ${TF_PUB_PID} 2>/dev/null || true
   kill ${NAV2_PID} 2>/dev/null || true
   kill ${BRIDGE_PID} 2>/dev/null || true
   kill ${ZENOHD_PID} 2>/dev/null || true
@@ -95,9 +117,24 @@ trap cleanup EXIT
 # Find upstream fleet_adapter launch file and invoke with per-robot config
 FLEET_ADAPTER_LAUNCH="$(ros2 pkg prefix rmf_demos_fleet_adapter)/share/rmf_demos_fleet_adapter/launch/fleet_adapter.launch.xml"
 
-# Launch fleet adapter (this blocks)
-exec ros2 launch "${FLEET_ADAPTER_LAUNCH}" \
-  use_sim_time:=true \
-  "nav_graph_file:=${NAV_GRAPH}" \
-  "config_file:=${FILTERED_CONFIG}" \
-  "server_uri:=${SERVER_URI}"
+# Launch fleet adapter with retry (RMF Schedule Node may not be ready yet)
+for attempt in 1 2 3 4 5; do
+  echo "[${ROBOT_NAME}] Fleet adapter attempt ${attempt}/5..."
+  ros2 launch "${FLEET_ADAPTER_LAUNCH}" \
+    use_sim_time:=true \
+    "nav_graph_file:=${NAV_GRAPH}" \
+    "config_file:=${FILTERED_CONFIG}" \
+    "server_uri:=${SERVER_URI}" &
+  FLEET_PID=$!
+  sleep 15
+  if kill -0 ${FLEET_PID} 2>/dev/null; then
+    echo "[${ROBOT_NAME}] Fleet adapter running (pid ${FLEET_PID})"
+    wait ${FLEET_PID}
+    break
+  fi
+  echo "[${ROBOT_NAME}] Fleet adapter exited, retrying in 10s..."
+  sleep 10
+done
+
+echo "[${ROBOT_NAME}] Fleet adapter exited after all attempts"
+wait

@@ -16,14 +16,12 @@ This bridge:
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
-
 import math
 import threading
-from typing import Dict, Optional
+from typing import Optional
 
 # RMF messages
-from rmf_fleet_msgs.msg import FleetState, RobotState, Location, ModeRequest
+from rmf_fleet_msgs.msg import RobotMode, ModeRequest
 
 # Nav2 action messages
 from nav2_msgs.action import NavigateToPose
@@ -36,8 +34,10 @@ class RMFNav2Bridge(Node):
         super().__init__('rmf_nav2_bridge')
 
         # Robot configuration
-        self.robot_name = self.get_parameter_or('robot_name', 'tinyRobot1').value
-        self.fleet_name = self.get_parameter_or('fleet_name', 'tinyRobot').value
+        self.declare_parameter('robot_name', 'tinyRobot1')
+        self.declare_parameter('fleet_name', 'tinyRobot')
+        self.robot_name = self.get_parameter('robot_name').value
+        self.fleet_name = self.get_parameter('fleet_name').value
 
         # RMF waypoint mapping (office environment)
         self.waypoints = {
@@ -53,20 +53,6 @@ class RMFNav2Bridge(Node):
         self.navigation_active = False
         self.robot_position = {'x': 0.0, 'y': 0.0, 'yaw': 0.0}
         self.goal_lock = threading.Lock()
-
-        # QoS for fleet communication
-        fleet_qos = QoSProfile(
-            depth=10,
-            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
-            reliability=QoSReliabilityPolicy.RELIABLE
-        )
-
-        # RMF Fleet Adapter Integration
-        self.fleet_state_pub = self.create_publisher(
-            FleetState,
-            '/fleet_states',
-            fleet_qos
-        )
 
         self.mode_request_sub = self.create_subscription(
             ModeRequest,
@@ -89,25 +75,22 @@ class RMFNav2Bridge(Node):
             10
         )
 
-        # Fleet state publishing timer
-        self.fleet_timer = self.create_timer(1.0, self.publish_fleet_state)
-
         self.get_logger().info(f"RMF-Nav2 Bridge started for {self.fleet_name}/{self.robot_name}")
 
     def mode_request_callback(self, msg: ModeRequest):
         """Handle mode requests from RMF fleet adapter."""
         self.get_logger().info(f"Received mode request: {msg.mode.mode}")
 
-        if msg.mode.mode == RobotState.MODE_MOVING:
+        if msg.mode.mode == RobotMode.MODE_MOVING:
             # Extract destination from mode request
             if hasattr(msg.mode, 'mode_request_id'):
                 destination = msg.mode.mode_request_id
                 self.navigate_to_waypoint(destination)
 
-        elif msg.mode.mode == RobotState.MODE_PAUSED:
+        elif msg.mode.mode == RobotMode.MODE_PAUSED:
             self.cancel_navigation()
 
-        elif msg.mode.mode == RobotState.MODE_IDLE:
+        elif msg.mode.mode == RobotMode.MODE_IDLE:
             self.cancel_navigation()
 
     def navigate_to_waypoint(self, waypoint_name: str):
@@ -231,40 +214,6 @@ class RMFNav2Bridge(Node):
             self.get_logger().info("Navigation successfully canceled")
         else:
             self.get_logger().warn("Failed to cancel navigation")
-
-    def publish_fleet_state(self):
-        """Publish robot state to RMF fleet system."""
-        msg = FleetState()
-        msg.name = self.fleet_name
-
-        robot_state = RobotState()
-        robot_state.name = self.robot_name
-        robot_state.model = 'TinyRobot'
-
-        # Robot location
-        robot_state.location = Location()
-        robot_state.location.level_name = 'L1'
-        robot_state.location.x = self.robot_position['x']
-        robot_state.location.y = self.robot_position['y']
-        robot_state.location.yaw = self.robot_position['yaw']
-
-        # Robot mode based on navigation status
-        if self.navigation_active:
-            robot_state.mode.mode = RobotState.MODE_MOVING
-        else:
-            robot_state.mode.mode = RobotState.MODE_IDLE
-
-        # Battery (simulated)
-        robot_state.battery_percent = 80.0
-
-        # Task info
-        if self.current_goal:
-            robot_state.task_id = f"nav_to_{self.current_goal}"
-        else:
-            robot_state.task_id = ""
-
-        msg.robots = [robot_state]
-        self.fleet_state_pub.publish(msg)
 
     def emergency_stop(self):
         """Emergency stop - publish zero velocity."""

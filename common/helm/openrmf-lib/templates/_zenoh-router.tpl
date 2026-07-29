@@ -18,6 +18,11 @@ Zenoh Router — container spec
     - name: zenoh-router-config
       mountPath: /etc/zenoh
       readOnly: true
+  readinessProbe:
+    tcpSocket:
+      port: {{ $root.Values.zenoh.port }}
+    initialDelaySeconds: 2
+    periodSeconds: 5
   resources:
     {{- toYaml $root.Values.zenoh.resources | nindent 4 }}
 {{- end }}

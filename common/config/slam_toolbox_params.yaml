@@ -1,5 +1,5 @@
 # SLAM Toolbox parameters for OpenRMF office environment
-slam_toolbox:
+/ROBOT_PLACEHOLDER/slam_toolbox:
   ros__parameters:
     # Plugin params
     solver_plugin: solver_plugins::CeresSolver
@@ -10,10 +10,10 @@ slam_toolbox:
     ceres_loss_function: None
 
     # ROS Parameters
-    odom_frame: odom
+    odom_frame: ROBOT_PLACEHOLDER/odom
     map_frame: map
-    base_frame: base_link
-    scan_topic: /scan
+    base_frame: ROBOT_PLACEHOLDER/base_footprint
+    scan_topic: /ROBOT_PLACEHOLDER/scan
     mode: mapping #localization
 
     # if you'd like to immediately start continuing a map at a given pose
@@ -30,7 +30,7 @@ slam_toolbox:
     resolution: 0.05
     max_laser_range: 20.0 #for rastering images
     minimum_time_interval: 0.5
-    transform_timeout: 0.2
+    transform_timeout: 2.0
     tf_buffer_duration: 30.
     stack_size_to_use: 40000000 #// program needs a larger stack size to serialize large maps
     enable_interactive_mode: true
@@ -38,8 +38,8 @@ slam_toolbox:
     # General Parameters
     use_scan_matching: true
     use_scan_barycenter: true
-    minimum_travel_distance: 0.5
-    minimum_travel_heading: 0.5
+    minimum_travel_distance: 0.0
+    minimum_travel_heading: 0.0
     scan_buffer_size: 10
     scan_buffer_maximum_scan_distance: 10.0
     link_match_minimum_response_fine: 0.1

@@ -9,31 +9,28 @@ ENV RMF_WS=/opt/rmf/rmf_demos_ws
 ENV ROS_LOG_DIR=/opt/rmf/.ros/log
 ENV HOME=/opt/rmf
 
-# 1. Install core system packages (avoiding problematic ros-dev-tools)
+# 1. Install ALL apt packages upfront (before any pip installs to avoid conflicts)
 RUN apt-get update && apt-get install -y \
     python3-pip \
     git \
     python3-colcon-common-extensions \
+    ros-dev-tools \
     ros-jazzy-rmf-dev \
     ros-jazzy-rmw-zenoh-cpp \
-    xvfb \
-    x11vnc \
-    x11-utils \
-    && rm -rf /var/lib/apt/lists/*
-
-# 1b. Install nav2 and sensor packages for Lidar/SLAM integration
-RUN apt-get update && apt-get install -y \
     ros-jazzy-navigation2 \
     ros-jazzy-nav2-bringup \
     ros-jazzy-slam-toolbox \
-    ros-jazzy-gazebo-plugins \
     ros-jazzy-robot-localization \
     ros-jazzy-pointcloud-to-laserscan \
     ros-jazzy-laser-filters \
+    ros-jazzy-rviz2 \
+    xvfb \
+    x11vnc \
+    x11-utils \
+    openbox \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Install Python packages with our critical system-level websockets override
-# This prevents the silent fleet manager uvicorn crash
+# 2. Install Python packages AFTER all apt packages to avoid dpkg conflicts
 RUN pip3 install --break-system-packages --ignore-installed \
     "fastapi>=0.79.0" "uvicorn>=0.18.2" pydantic flask-socketio \
     datamodel_code_generator websockets
@@ -53,7 +50,13 @@ RUN apt-get update && \
 #    Explicit bash — Podman OCI format ignores Dockerfile SHELL directive
 RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install"
 
-# 5b. Create Open-RMF/ symlink directory so Fuel-style model URIs
+# 5b. Inject gz::sim::systems::Sensors plugin into office world
+#     (required for gpu_lidar sensor data generation)
+COPY common/scripts/inject_sensors_plugin.py /tmp/inject_sensors_plugin.py
+RUN python3 /tmp/inject_sensors_plugin.py \
+    "${RMF_WS}/install/rmf_demos_maps/share/rmf_demos_maps/maps/office/office.world"
+
+# 5c. Create Open-RMF/ symlink directory so Fuel-style model URIs
 #     (model://Open-RMF/TinyRobot) resolve from GZ_SIM_RESOURCE_PATH
 RUN MODELS_DIR="${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models" && \
     mkdir -p "${MODELS_DIR}/Open-RMF" && \
@@ -63,7 +66,10 @@ RUN MODELS_DIR="${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models
       ln -sf "../${name}" "${MODELS_DIR}/Open-RMF/${name}"; \
     done
 
-# 6. Copy shared helper scripts, launch files, and config files for robot-as-pod architecture
+# 6. Override stock TinyRobot model with lidar-equipped version
+COPY common/models/TinyRobot/ ${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models/TinyRobot/
+
+# 6b. Copy shared helper scripts, launch files, and config files
 COPY common/scripts/ /opt/rmf/scripts/
 COPY common/launch/ /opt/rmf/demos/common/launch/
 COPY common/config/ /opt/rmf/config/
