@@ -11,7 +11,7 @@
 
     # ROS Parameters
     odom_frame: ROBOT_PLACEHOLDER/odom
-    map_frame: map
+    map_frame: ROBOT_PLACEHOLDER/map
     base_frame: ROBOT_PLACEHOLDER/base_footprint
     scan_topic: /ROBOT_PLACEHOLDER/scan
     mode: mapping #localization
@@ -38,8 +38,8 @@
     # General Parameters
     use_scan_matching: true
     use_scan_barycenter: true
-    minimum_travel_distance: 0.0
-    minimum_travel_heading: 0.0
+    minimum_travel_distance: 0.5
+    minimum_travel_heading: 0.5
     scan_buffer_size: 10
     scan_buffer_maximum_scan_distance: 10.0
     link_match_minimum_response_fine: 0.1

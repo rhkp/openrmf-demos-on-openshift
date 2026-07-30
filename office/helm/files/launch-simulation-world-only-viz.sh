@@ -25,6 +25,8 @@ X11VNC_PID=$!
 
 cleanup() {
   echo "[simulation-world] Cleaning up..."
+  kill ${GZ_GUI_PID:-} 2>/dev/null || true
+  kill ${GT_ODOM_PID:-} 2>/dev/null || true
   kill ${GLOBAL_TF_PID:-} 2>/dev/null || true
   kill ${RVIZ_PID:-} 2>/dev/null || true
   kill ${OPENBOX_PID:-} 2>/dev/null || true
@@ -36,7 +38,23 @@ trap cleanup EXIT
 
 sleep 2
 
-# Start window manager so user can move/resize windows in noVNC
+# Configure openbox with visible window decorations (title bar + min/max/close buttons)
+mkdir -p "${HOME}/.config/openbox"
+cat > "${HOME}/.config/openbox/rc.xml" << 'OBCONF'
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <theme><name>Clearlooks</name><titleLayout>NLIMC</titleLayout>
+    <font place="ActiveWindow"><name>sans</name><size>10</size><weight>Bold</weight></font>
+    <font place="InactiveWindow"><name>sans</name><size>9</size><weight>Normal</weight></font>
+  </theme>
+  <desktops><number>1</number></desktops>
+  <resize><drawContents>yes</drawContents></resize>
+  <applications>
+    <application class="*"><decor>yes</decor></application>
+  </applications>
+</openbox_config>
+OBCONF
+
 echo "[simulation-world] Starting openbox window manager..."
 DISPLAY="${DISPLAY_NUM}" openbox &
 OPENBOX_PID=$!
@@ -64,6 +82,18 @@ SIM_PID=$!
 
 # Wait for simulation to start
 sleep 15
+
+# Gazebo GUI client: connects to the headless server for 3D robot visualization.
+# Uses mesa software rendering on Xvfb (the server's EGL+GPU sensor rendering is unaffected).
+echo "[simulation-world] Starting Gazebo GUI on VNC display..."
+DISPLAY="${DISPLAY_NUM}" LIBGL_ALWAYS_SOFTWARE=1 __EGL_VENDOR_LIBRARY_FILENAMES="" \
+  gz sim -g --force-version 8 &
+GZ_GUI_PID=$!
+
+# Ground-truth odometry: reads Gazebo world poses via gz-transport subprocess
+echo "[simulation-world] Starting ground-truth odom publisher..."
+python3 /opt/rmf/scripts/ground_truth_odom.py --ros-args -p use_sim_time:=true &
+GT_ODOM_PID=$!
 
 # Global TF publisher: publishes robot TF on global /tf for RViz
 # (robot pods publish on namespaced /{robot}/tf for Nav2/SLAM)

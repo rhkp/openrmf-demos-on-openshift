@@ -79,7 +79,7 @@ Visualization Manager:
 
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: map
+    Fixed Frame: world
     Frame Rate: 15
   Name: root
   Tools:

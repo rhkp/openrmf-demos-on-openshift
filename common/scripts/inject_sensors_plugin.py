@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Inject gz::sim::systems::Sensors plugin into a gz-sim world file."""
+"""Modify a gz-sim world file for DiffDrive-based Nav2 navigation.
+
+1. Inject gz::sim::systems::Sensors plugin (required for gpu_lidar)
+2. Remove liblift.so plugin (crashes with DiffDrive due to ECS incompatibility)
+"""
 import re
 import sys
 
@@ -29,7 +33,14 @@ else:
         sensors_block + '\n    <plugin filename="libdoor.so"'
     )
 
+# Remove lift plugin — crashes with DiffDrive (SIGSEGV in std::_Rb_tree_increment
+# during UpdateSystems when DiffDrive joints are present in the ECS)
+content = re.sub(
+    r'\s*<plugin\s+filename="liblift\.so"[^>]*>.*?</plugin>',
+    '', content, flags=re.DOTALL
+)
+
 with open(world_file, 'w') as f:
     f.write(content)
 
-print(f'Injected Sensors plugin into {world_file}')
+print(f'Injected Sensors plugin and removed lift plugin from {world_file}')

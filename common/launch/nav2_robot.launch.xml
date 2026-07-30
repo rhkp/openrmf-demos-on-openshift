@@ -23,6 +23,8 @@
       <param name="use_sim_time" value="$(var use_sim_time)" />
       <remap from="/tf" to="tf" />
       <remap from="/tf_static" to="tf_static" />
+      <remap from="/map" to="map" />
+      <remap from="/map_metadata" to="map_metadata" />
     </node>
 
     <!-- Lifecycle manager for SLAM Toolbox (sync_slam_toolbox_node is a lifecycle node).

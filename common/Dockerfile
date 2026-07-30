@@ -46,6 +46,34 @@ RUN apt-get update && \
     rosdep install --from-paths src --ignore-src --rosdistro jazzy -y && \
     rm -rf /var/lib/apt/lists/*
 
+# 4b. Fix RViz Map display shader for Mesa software rendering (noVNC uses llvmpipe).
+#     Mesa's GLSL linker rejects sampler1D + sampler2D on the same program.
+#     Replace the palette-based shader with one that hardcodes map colors directly,
+#     eliminating the palette texture and the sampler type conflict entirely.
+RUN MATERIALS=/opt/ros/jazzy/share/rviz_rendering/ogre_media/materials && \
+    printf '%s\n' \
+      '#version 120' \
+      'varying vec2 UV;' \
+      'uniform sampler2D eight_bit_image;' \
+      'uniform float alpha;' \
+      'void main()' \
+      '{' \
+      '  float val = texture2D(eight_bit_image, UV).x;' \
+      '  float is_unknown = step(0.99, val);' \
+      '  float is_free = step(val, 0.004);' \
+      '  float is_occ = (1.0 - is_unknown) * (1.0 - is_free);' \
+      '  float occ_shade = 1.0 - clamp(val * 255.0 / 100.0, 0.0, 1.0);' \
+      '  vec3 color = is_free * vec3(0.94, 0.94, 0.94)' \
+      '             + is_unknown * vec3(0.6, 0.6, 0.6)' \
+      '             + is_occ * vec3(occ_shade);' \
+      '  gl_FragColor = vec4(color, alpha);' \
+      '}' \
+      > "${MATERIALS}/glsl120/indexed_8bit_image.frag" && \
+    sed -i '/param_named palette/d' \
+      "${MATERIALS}/scripts/indexed_8bit_image.material" && \
+    sed -i '/test_20x20/d' \
+      "${MATERIALS}/scripts/indexed_8bit_image.material"
+
 # 5. Compile the demo layout workspace with symlink support
 #    Explicit bash — Podman OCI format ignores Dockerfile SHELL directive
 RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install"

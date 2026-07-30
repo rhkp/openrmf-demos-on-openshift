@@ -27,8 +27,10 @@
 
   <let name="gz_headless" if="$(var headless)" value="-s"/>
   <let name="gz_headless" unless="$(var headless)" value="" />
+  <let name="gz_render" if="$(var headless)" value="--headless-rendering"/>
+  <let name="gz_render" unless="$(var headless)" value="" />
 
-  <executable cmd="gz sim --force-version $(var gazebo_version) $(var gz_headless) -r -v 3 $(var world_path)" output="both">
+  <executable cmd="gz sim --force-version $(var gazebo_version) $(var gz_headless) $(var gz_render) -r -v 3 $(var world_path)" output="both">
     <env name="GZ_SIM_RESOURCE_PATH" value="$(env GZ_SIM_RESOURCE_PATH):$(var model_path)" />
   </executable>
 
@@ -63,18 +65,8 @@
     <remap from="/model/tinyRobot2/cmd_vel" to="/tinyRobot2/cmd_vel" />
   </node>
 
-  <!-- ros_gz_bridge for odometry: DiffDrive (gz-sim) → Nav2/TF publisher (ROS2) -->
-  <node pkg="ros_gz_bridge" exec="parameter_bridge"
-    args="/model/tinyRobot1/odometry@nav_msgs/msg/Odometry[gz.msgs.Odometry"
-    name="odom_bridge_robot1">
-    <remap from="/model/tinyRobot1/odometry" to="/tinyRobot1/odom" />
-  </node>
-
-  <node pkg="ros_gz_bridge" exec="parameter_bridge"
-    args="/model/tinyRobot2/odometry@nav_msgs/msg/Odometry[gz.msgs.Odometry"
-    name="odom_bridge_robot2">
-    <remap from="/model/tinyRobot2/odometry" to="/tinyRobot2/odom" />
-  </node>
+  <!-- Odometry is published by ground_truth_odom.py (launched from sim pod script) -->
+  <!-- using Gazebo world poses instead of DiffDrive's broken wheel-joint integration -->
 
   <!-- NOTE: fleet adapter is NOT included here - it runs in separate robot pods -->
 
