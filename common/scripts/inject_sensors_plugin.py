@@ -40,7 +40,10 @@ content = re.sub(
     '', content, flags=re.DOTALL
 )
 
+robot2_pattern = r'(<include>\s*<name>tinyRobot2</name>\s*<uri>)model://TinyRobot(</uri>)'
+content = re.sub(robot2_pattern, r'\1model://TinyRobot2\2', content, flags=re.DOTALL)
+
 with open(world_file, 'w') as f:
     f.write(content)
 
-print(f'Injected Sensors plugin and removed lift plugin from {world_file}')
+print(f'Injected Sensors plugin, removed lift plugin, set robot2 model from {world_file}')

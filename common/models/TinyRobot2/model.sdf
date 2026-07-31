@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 
 <sdf version='1.6'>
-  <model name='TinyRobot'>
+  <model name='TinyRobot2'>
     <plugin filename="gz-sim-diff-drive-system"
             name="gz::sim::systems::DiffDrive">
       <left_joint>joint_tire_left</left_joint>
@@ -169,8 +169,8 @@
           </cylinder>
         </geometry>
         <material>
-          <ambient>1.0 0.3 0.3 1</ambient>
-          <diffuse>1.0 0.4 0.4 1</diffuse>
+          <ambient>1.0 0.9 0.0 1</ambient>
+          <diffuse>1.0 0.95 0.1 1</diffuse>
         </material>
       </visual>
       <visual name='base_footprint_fixed_joint_lump__base_link_visual_1'>
