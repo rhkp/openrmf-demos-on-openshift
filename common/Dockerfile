@@ -38,7 +38,8 @@ RUN pip3 install --break-system-packages --ignore-installed \
 # 3. Initialize and clone the Open-RMF Demos Workspace
 WORKDIR ${RMF_WS}
 RUN mkdir -p src && cd src && \
-    git clone https://github.com/open-rmf/rmf_demos.git -b jazzy
+    git clone https://github.com/open-rmf/rmf_demos.git -b jazzy && \
+    git clone https://github.com/robo-friends/m-explore-ros2.git -b main
 
 # 4. Resolve workspace package dependencies via rosdep
 RUN apt-get update && \
@@ -82,7 +83,19 @@ RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-ins
 #     (required for gpu_lidar sensor data generation)
 COPY common/scripts/inject_sensors_plugin.py /tmp/inject_sensors_plugin.py
 RUN python3 /tmp/inject_sensors_plugin.py \
-    "${RMF_WS}/install/rmf_demos_maps/share/rmf_demos_maps/maps/office/office.world"
+    "${RMF_WS}/install/rmf_demos_maps/share/rmf_demos_maps/maps/office/office.world" && \
+    python3 /tmp/inject_sensors_plugin.py \
+    "${RMF_WS}/install/rmf_demos_maps/share/rmf_demos_maps/maps/airport_terminal/airport_terminal.world"
+
+# 5c-ii. Extract gz-sim world element names for ros_gz_bridge topic construction
+RUN mkdir -p /opt/rmf/config && \
+    for world_file in office/office airport_terminal/airport_terminal; do \
+      demo=$(dirname "$world_file"); \
+      python3 -c "import re; \
+        m=re.search(r'<world name=\"([^\"]+)\"', \
+        open('${RMF_WS}/install/rmf_demos_maps/share/rmf_demos_maps/maps/${world_file}.world').read()); \
+        print(m.group(1))" > "/opt/rmf/config/${demo}_gz_world_name.txt"; \
+    done
 
 # 5c. Create Open-RMF/ symlink directory so Fuel-style model URIs
 #     (model://Open-RMF/TinyRobot) resolve from GZ_SIM_RESOURCE_PATH

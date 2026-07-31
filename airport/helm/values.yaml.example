@@ -11,8 +11,8 @@ namespace:
   name: rmf-demos
 
 image:
-  # Full Quay.io reference (built with common/build-and-push.sh)
-  fullRef: quay.io/your-org/openrmf-openshift-airport-demo:certified
+  # Full Quay.io reference — shared image with office demo (includes both worlds)
+  fullRef: quay.io/your-org/openrmf-openshift-office-demo:nav2-sensors
   pullPolicy: Always
 
 # Optional — for private Quay repositories
@@ -26,6 +26,24 @@ serviceAccount:
 demo:
   name: airport
   launchFile: airport_terminal.launch.xml
+
+# Robot-as-individual-pod architecture (Nav2 + SLAM per robot)
+# Set enabled: false for traditional all-in-one deployment
+robots:
+  enabled: true
+  fleet_name: "tinyRobot"
+  instances:
+    - name: tinyRobot_0
+    - name: tinyRobot_1
+  resources:
+    requests:
+      cpu: "3"
+      memory: "6Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+  fleetCoordinator:
+    enabled: false
 
 dispatch:
   command: /opt/rmf/demos/airport/scripts/dispatch-task.sh
@@ -124,6 +142,23 @@ resources:
     limits:
       cpu: "10"
       memory: 14Gi
+  # Used when robots.enabled — world-only simulation (no robot processes)
+  simulationWorldOnly:
+    requests:
+      cpu: "2"
+      memory: "4Gi"
+    limits:
+      cpu: "3"
+      memory: "6Gi"
+  simulationWorldOnlyViz:
+    requests:
+      cpu: "4"
+      memory: 4Gi
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "6"
+      memory: 8Gi
+      nvidia.com/gpu: "1"
   fleetMonitor:
     requests:
       cpu: 250m

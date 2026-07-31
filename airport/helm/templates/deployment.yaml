@@ -23,6 +23,24 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+      {{- if and (.Values.robots).enabled .Values.novnc.enabled }}
+      tolerations:
+        - key: "g5-gpu"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+      {{- end }}
+      {{- if .Values.zenoh.enabled }}
+      initContainers:
+        - name: wait-for-zenoh
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z {{ include "openrmf-airport.fullname" . }}-zenoh-router {{ .Values.zenoh.port }}; do echo "Waiting for Zenoh router..."; sleep 2; done']
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+      {{- end }}
       volumes:
         - name: dshm
           emptyDir:
@@ -38,10 +56,20 @@ spec:
         - name: simulation
           image: {{ required "image.fullRef is required" .Values.image.fullRef | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if (.Values.robots).enabled }}
+          # Robot-as-pod mode: launch world simulation only
+          {{- if .Values.novnc.enabled }}
+          command: ["/opt/rmf/scripts/launch-simulation-world-only-viz.sh"]
+          {{- else }}
+          command: ["/opt/rmf/scripts/launch-simulation-world-only.sh"]
+          {{- end }}
+          {{- else }}
+          # Traditional mode: launch full simulation with robots
           {{- if .Values.novnc.enabled }}
           command: ["/opt/rmf/scripts/launch-simulation-viz.sh"]
           {{- else }}
           command: ["/opt/rmf/scripts/launch-simulation.sh"]
+          {{- end }}
           {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
@@ -49,10 +77,18 @@ spec:
             capabilities:
               drop: ["ALL"]
           resources:
+            {{- if (.Values.robots).enabled }}
+            {{- if .Values.novnc.enabled }}
+            {{- toYaml .Values.resources.simulationWorldOnlyViz | nindent 12 }}
+            {{- else }}
+            {{- toYaml .Values.resources.simulationWorldOnly | nindent 12 }}
+            {{- end }}
+            {{- else }}
             {{- if .Values.novnc.enabled }}
             {{- toYaml .Values.resources.simulationViz | nindent 12 }}
             {{- else }}
             {{- toYaml .Values.resources.simulation | nindent 12 }}
+            {{- end }}
             {{- end }}
           volumeMounts:
             - name: dshm
@@ -70,9 +106,20 @@ spec:
               mountPath: /opt/rmf/scripts/launch-simulation-viz.sh
               subPath: launch-simulation-viz.sh
             {{- end }}
+            {{- if (.Values.robots).enabled }}
+            {{- if .Values.novnc.enabled }}
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/launch-simulation-world-only-viz.sh
+              subPath: launch-simulation-world-only-viz.sh
+            {{- end }}
+            {{- end }}
           env:
             - name: RMF_LAUNCH_FILE
               value: {{ .Values.demo.launchFile | quote }}
+            {{- if (.Values.robots).enabled }}
+            - name: RMF_WORLD_NAME
+              value: {{ .Values.demo.name | quote }}
+            {{- end }}
             {{- if .Values.rmfWeb.enabled }}
             - name: RMF_SERVER_URI
               value: {{ .Values.rmfWeb.serverUri | quote }}
@@ -93,8 +140,10 @@ spec:
               value: {{ .Values.novnc.displayWidth | quote }}
             - name: RMF_VNC_HEIGHT
               value: {{ .Values.novnc.displayHeight | quote }}
-            - name: LIBGL_ALWAYS_SOFTWARE
-              value: "1"
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "all"
+            - name: NVIDIA_DRIVER_CAPABILITIES
+              value: "all"
             {{- end }}
 
         - name: fleet-monitor

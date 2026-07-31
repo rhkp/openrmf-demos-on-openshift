@@ -16,20 +16,30 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
 
-ROBOTS = ['tinyRobot1', 'tinyRobot2']
-GZ_TOPIC = '/world/sim_world/dynamic_pose/info'
+DEFAULT_ROBOTS = ['tinyRobot1', 'tinyRobot2']
+DEFAULT_GZ_WORLD = 'sim_world'
 
 
 class GroundTruthOdom(Node):
     def __init__(self):
         super().__init__('ground_truth_odom')
+
+        self.declare_parameter('robot_names', DEFAULT_ROBOTS)
+        self.declare_parameter('gz_world_name', DEFAULT_GZ_WORLD)
+        self.robots = list(self.get_parameter('robot_names').value)
+        gz_world = self.get_parameter('gz_world_name').value
+        self.gz_topic = f'/world/{gz_world}/dynamic_pose/info'
+
         self.odom_pubs = {
             r: self.create_publisher(Odometry, f'/{r}/odom', 10)
-            for r in ROBOTS
+            for r in self.robots
         }
         self.initial_poses = {}
         self.latest_poses = {}
         self.lock = threading.Lock()
+
+        self.get_logger().info(
+            f'Robots: {self.robots}, gz topic: {self.gz_topic}')
 
         t = threading.Thread(target=self._read_gz_poses, daemon=True)
         t.start()
@@ -39,7 +49,7 @@ class GroundTruthOdom(Node):
 
     def _read_gz_poses(self):
         proc = subprocess.Popen(
-            ['gz', 'topic', '-e', '-t', GZ_TOPIC],
+            ['gz', 'topic', '-e', '-t', self.gz_topic],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             text=True, bufsize=1)
 
@@ -68,7 +78,7 @@ class GroundTruthOdom(Node):
                 section = 'rot'
                 continue
             if line == '}':
-                if section == 'rot' and cur_name in ROBOTS \
+                if section == 'rot' and cur_name in self.robots \
                         and 'x' in pos and 'y' in pos \
                         and 'z' in rot and 'w' in rot:
                     with self.lock:
@@ -95,7 +105,7 @@ class GroundTruthOdom(Node):
 
     def _publish_odom(self):
         with self.lock:
-            for name in ROBOTS:
+            for name in self.robots:
                 if name not in self.latest_poses \
                         or name not in self.initial_poses:
                     continue

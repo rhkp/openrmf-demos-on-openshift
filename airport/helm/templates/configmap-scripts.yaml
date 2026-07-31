@@ -12,3 +12,11 @@ data:
 {{ .Files.Get "files/launch-simulation.sh" | indent 4 }}
   launch-simulation-viz.sh: |
 {{ .Files.Get "files/launch-simulation-viz.sh" | indent 4 }}
+  {{- if (.Values.robots).enabled }}
+  launch-simulation-world-only-viz.sh: |
+{{ .Files.Get "files/launch-simulation-world-only-viz.sh" | indent 4 }}
+  launch-robot.sh: |
+{{ .Files.Get "files/launch-robot.sh" | indent 4 }}
+  wait-for-world.sh: |
+{{ .Files.Get "files/wait-for-world.sh" | indent 4 }}
+  {{- end }}

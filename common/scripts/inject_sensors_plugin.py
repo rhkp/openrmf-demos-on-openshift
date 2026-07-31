@@ -43,6 +43,10 @@ content = re.sub(
 robot2_pattern = r'(<include>\s*<name>tinyRobot2</name>\s*<uri>)model://TinyRobot(</uri>)'
 content = re.sub(robot2_pattern, r'\1model://TinyRobot2\2', content, flags=re.DOTALL)
 
+# Airport uses underscore naming (tinyRobot_1) vs office's camelCase (tinyRobot2)
+robot2_alt = r'(<include>\s*<name>tinyRobot_1</name>\s*<uri>)model://TinyRobot(</uri>)'
+content = re.sub(robot2_alt, r'\1model://TinyRobot2\2', content, flags=re.DOTALL)
+
 with open(world_file, 'w') as f:
     f.write(content)
 

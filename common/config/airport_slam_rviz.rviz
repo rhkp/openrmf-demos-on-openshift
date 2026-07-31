@@ -1,0 +1,100 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Map
+      Name: SLAM Map (Robot0)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot_0/map
+        Depth: 1
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+      Update Topic:
+        Value: /tinyRobot_0/map_updates
+      Alpha: 0.7
+      Color Scheme: map
+      Draw Behind: true
+
+    - Class: rviz_default_plugins/Map
+      Name: SLAM Map (Robot1)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot_1/map
+        Depth: 1
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+      Update Topic:
+        Value: /tinyRobot_1/map_updates
+      Alpha: 0.5
+      Color Scheme: costmap
+      Draw Behind: true
+
+    - Class: rviz_default_plugins/LaserScan
+      Name: Lidar (Robot0)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot_0/scan
+        Depth: 5
+        Reliability Policy: Best Effort
+      Color Transformer: FlatColor
+      Color: 255; 0; 0
+      Size (m): 0.05
+      Style: Points
+
+    - Class: rviz_default_plugins/LaserScan
+      Name: Lidar (Robot1)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot_1/scan
+        Depth: 5
+        Reliability Policy: Best Effort
+      Color Transformer: FlatColor
+      Color: 0; 0; 255
+      Size (m): 0.05
+      Style: Points
+
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Show Arrows: false
+      Show Axes: true
+      Show Names: true
+      Frame Timeout: 15
+      Frames:
+        All Enabled: true
+
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 1
+      Line Style:
+        Value: Lines
+      Color: 160; 160; 164
+      Plane Cell Count: 50
+
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: world
+    Frame Rate: 15
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: TopDownOrtho
+      Scale: 15
+      X: 20
+      Y: -10
+Window Geometry:
+  Width: 900
+  Height: 700
+  Displays:
+    collapsed: false
