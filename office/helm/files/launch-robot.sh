@@ -117,20 +117,24 @@ trap cleanup EXIT
 
 # Launch fleet adapter directly (NOT the upstream launch file, which also starts
 # its own fleet_manager that would conflict with ours on port 22011).
-for attempt in 1 2 3 4 5; do
-  echo "[${ROBOT_NAME}] Fleet adapter attempt ${attempt}/5..."
+# Wait for traffic schedule to be discoverable via Zenoh before starting.
+echo "[${ROBOT_NAME}] Waiting 30s for traffic schedule node to be discoverable..."
+sleep 30
+
+for attempt in 1 2 3 4 5 6 7 8; do
+  echo "[${ROBOT_NAME}] Fleet adapter attempt ${attempt}/8..."
   ros2 run rmf_demos_fleet_adapter fleet_adapter \
-    -- -c "${FILTERED_CONFIG}" -n "${NAV_GRAPH}" -sim \
+    -c "${FILTERED_CONFIG}" -n "${NAV_GRAPH}" -sim \
     --ros-args -p use_sim_time:=true -p server_uri:="${SERVER_URI}" &
   FLEET_PID=$!
-  sleep 15
+  sleep 20
   if kill -0 ${FLEET_PID} 2>/dev/null; then
     echo "[${ROBOT_NAME}] Fleet adapter running (pid ${FLEET_PID})"
     wait ${FLEET_PID}
     break
   fi
-  echo "[${ROBOT_NAME}] Fleet adapter exited, retrying in 10s..."
-  sleep 10
+  echo "[${ROBOT_NAME}] Fleet adapter exited, retrying in 15s..."
+  sleep 15
 done
 
 echo "[${ROBOT_NAME}] Fleet adapter exited after all attempts"
