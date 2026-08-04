@@ -256,5 +256,19 @@
       <pose>4.0 0 0.01 0 0 3.14159</pose>
     </include>
 
+    <!-- Robot 3 (green beacon): south side facing north (+y, yaw=pi/2) -->
+    <include>
+      <name>tinyRobot3</name>
+      <uri>model://TinyRobot3</uri>
+      <pose>0 -4.0 0.01 0 0 1.5708</pose>
+    </include>
+
+    <!-- Robot 4 (blue beacon): north side facing south (-y, yaw=-pi/2) -->
+    <include>
+      <name>tinyRobot4</name>
+      <uri>model://TinyRobot4</uri>
+      <pose>0 4.0 0.01 0 0 -1.5708</pose>
+    </include>
+
   </world>
 </sdf>

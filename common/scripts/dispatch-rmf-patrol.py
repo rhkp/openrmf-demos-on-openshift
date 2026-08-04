@@ -24,16 +24,24 @@ class RMFPatrolDispatcher(Node):
 
         self.declare_parameter('robot_0', 'tinyRobot1')
         self.declare_parameter('robot_1', 'tinyRobot2')
+        self.declare_parameter('robot_2', 'tinyRobot3')
+        self.declare_parameter('robot_3', 'tinyRobot4')
         self.declare_parameter('fleet_name', 'tinyRobot')
-        self.declare_parameter('robot_0_dest', 'wp_right')
-        self.declare_parameter('robot_1_dest', 'wp_left')
+        self.declare_parameter('robot_0_dest', 'wp_east')
+        self.declare_parameter('robot_1_dest', 'wp_west')
+        self.declare_parameter('robot_2_dest', 'wp_north')
+        self.declare_parameter('robot_3_dest', 'wp_south')
         self.declare_parameter('wait_seconds', 30)
 
         self.robot_0 = self.get_parameter('robot_0').value
         self.robot_1 = self.get_parameter('robot_1').value
+        self.robot_2 = self.get_parameter('robot_2').value
+        self.robot_3 = self.get_parameter('robot_3').value
         self.fleet_name = self.get_parameter('fleet_name').value
         self.robot_0_dest = self.get_parameter('robot_0_dest').value
         self.robot_1_dest = self.get_parameter('robot_1_dest').value
+        self.robot_2_dest = self.get_parameter('robot_2_dest').value
+        self.robot_3_dest = self.get_parameter('robot_3_dest').value
         self.wait_seconds = self.get_parameter('wait_seconds').value
 
         self.task_pub = self.create_publisher(
@@ -48,14 +56,19 @@ class RMFPatrolDispatcher(Node):
             self._fleet_state_cb, 10
         )
 
+        self.all_robots = [self.robot_0, self.robot_1,
+                           self.robot_2, self.robot_3]
         self.robots_seen = set()
         self.fleet_ready = False
         self.dispatched = False
         self.pending_responses = {}
 
         self.get_logger().info(
-            f'RMF Patrol Dispatcher: {self.robot_0}→{self.robot_0_dest}, '
-            f'{self.robot_1}→{self.robot_1_dest}'
+            f'RMF Patrol Dispatcher (4 robots): '
+            f'{self.robot_0}→{self.robot_0_dest}, '
+            f'{self.robot_1}→{self.robot_1_dest}, '
+            f'{self.robot_2}→{self.robot_2_dest}, '
+            f'{self.robot_3}→{self.robot_3_dest}'
         )
 
         self.create_timer(2.0, self._check_and_dispatch)
@@ -67,9 +80,8 @@ class RMFPatrolDispatcher(Node):
             if robot.name not in self.robots_seen:
                 self.get_logger().info(f'Discovered robot: {robot.name}')
             self.robots_seen.add(robot.name)
-        if (self.robot_0 in self.robots_seen and
-                self.robot_1 in self.robots_seen and
-                not self.fleet_ready):
+        if (all(r in self.robots_seen for r in self.all_robots)
+                and not self.fleet_ready):
             self.get_logger().info(
                 f'Fleet ready with robots: {sorted(self.robots_seen)}'
             )
@@ -86,11 +98,13 @@ class RMFPatrolDispatcher(Node):
             )
             return
 
-        self.get_logger().info('Fleet registered, dispatching opposing patrols')
+        self.get_logger().info('Fleet registered, dispatching cross patrols')
         self.dispatched = True
 
         self._dispatch_patrol(self.robot_0, self.robot_0_dest)
         self._dispatch_patrol(self.robot_1, self.robot_1_dest)
+        self._dispatch_patrol(self.robot_2, self.robot_2_dest)
+        self._dispatch_patrol(self.robot_3, self.robot_3_dest)
 
     def _dispatch_patrol(self, robot_name, destination):
         request_id = str(uuid.uuid4())

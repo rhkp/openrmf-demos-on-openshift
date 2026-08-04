@@ -110,8 +110,12 @@ RUN MODELS_DIR="${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models
 # 6. Override stock TinyRobot model with lidar-equipped version (+ colored variant for Robot2)
 COPY common/models/TinyRobot/ ${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models/TinyRobot/
 COPY common/models/TinyRobot2/ ${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models/TinyRobot2/
+COPY common/models/TinyRobot3/ ${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models/TinyRobot3/
+COPY common/models/TinyRobot4/ ${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models/TinyRobot4/
 RUN MODELS_DIR="${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models" && \
-    ln -sf "../TinyRobot2" "${MODELS_DIR}/Open-RMF/TinyRobot2"
+    ln -sf "../TinyRobot2" "${MODELS_DIR}/Open-RMF/TinyRobot2" && \
+    ln -sf "../TinyRobot3" "${MODELS_DIR}/Open-RMF/TinyRobot3" && \
+    ln -sf "../TinyRobot4" "${MODELS_DIR}/Open-RMF/TinyRobot4"
 
 # 6b. Copy shared helper scripts, launch files, config files, and custom worlds
 COPY common/scripts/ /opt/rmf/scripts/

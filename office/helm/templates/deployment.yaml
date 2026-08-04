@@ -222,10 +222,18 @@ spec:
               value: {{ (index .Values.robots.instances 0).name | quote }}
             - name: ROBOT_1
               value: {{ (index .Values.robots.instances 1).name | quote }}
+            - name: ROBOT_2
+              value: {{ (index .Values.robots.instances 2).name | quote }}
+            - name: ROBOT_3
+              value: {{ (index .Values.robots.instances 3).name | quote }}
             - name: ROBOT_0_DEST
-              value: "wp_right"
+              value: "wp_east"
             - name: ROBOT_1_DEST
-              value: "wp_left"
+              value: "wp_west"
+            - name: ROBOT_2_DEST
+              value: "wp_north"
+            - name: ROBOT_3_DEST
+              value: "wp_south"
             - name: FLEET_NAME
               value: {{ .Values.robots.fleet_name | quote }}
             {{- if .Values.zenoh.enabled }}

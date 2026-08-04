@@ -17,7 +17,7 @@ from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 
-DEFAULT_ROBOTS = ['tinyRobot1', 'tinyRobot2']
+DEFAULT_ROBOTS = ['tinyRobot1', 'tinyRobot2', 'tinyRobot3', 'tinyRobot4']
 DEFAULT_GZ_WORLD = 'sim_world'
 
 

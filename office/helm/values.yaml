@@ -28,6 +28,8 @@ robots:
   instances:
     - name: tinyRobot1
     - name: tinyRobot2
+    - name: tinyRobot3
+    - name: tinyRobot4
   resources:
     requests:
       cpu: "3"        # Increased for nav2 + SLAM processing

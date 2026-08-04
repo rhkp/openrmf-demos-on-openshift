@@ -17,7 +17,7 @@ from nav_msgs.msg import Odometry
 from tf2_msgs.msg import TFMessage
 from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 
-DEFAULT_ROBOTS = ['tinyRobot1', 'tinyRobot2']
+DEFAULT_ROBOTS = ['tinyRobot1', 'tinyRobot2', 'tinyRobot3', 'tinyRobot4']
 
 
 class GlobalTFPublisher(Node):

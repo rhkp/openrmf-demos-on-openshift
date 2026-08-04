@@ -30,10 +30,16 @@ rmf_fleet:
   responsive_wait: true
   robots:
     tinyRobot1:
-      charger: "wp_left"
+      charger: "wp_west"
       responsive_wait: false
     tinyRobot2:
-      charger: "wp_right"
+      charger: "wp_east"
+      responsive_wait: false
+    tinyRobot3:
+      charger: "wp_south"
+      responsive_wait: false
+    tinyRobot4:
+      charger: "wp_north"
       responsive_wait: false
 
 fleet_manager:
