@@ -19,12 +19,16 @@ LIBGL_ALWAYS_SOFTWARE=1 __EGL_VENDOR_LIBRARY_FILENAMES="" \
   Xvfb "${DISPLAY_NUM}" -screen 0 "${RMF_VNC_WIDTH}x${RMF_VNC_HEIGHT}x24" +extension GLX &
 XVFB_PID=$!
 
+sleep 3
+
 echo "[simulation-world] Starting x11vnc on port ${RMF_VNC_PORT}..."
 x11vnc -display "${DISPLAY_NUM}" -rfbport "${RMF_VNC_PORT}" -shared -forever -nopw &
 X11VNC_PID=$!
 
 cleanup() {
   echo "[simulation-world] Cleaning up..."
+  kill ${FLEET_PID:-} 2>/dev/null || true
+  kill ${FLEET_MGR_PID:-} 2>/dev/null || true
   kill ${GZ_GUI_PID:-} 2>/dev/null || true
   kill ${GT_ODOM_PID:-} 2>/dev/null || true
   kill ${TRAFFIC_SCHED_PID:-} 2>/dev/null || true
@@ -112,5 +116,36 @@ GLOBAL_TF_PID=$!
 echo "[simulation-world] Starting RViz2 for SLAM/lidar visualization..."
 DISPLAY="${DISPLAY_NUM}" rviz2 -d /opt/rmf/config/slam_rviz.rviz --ros-args -p use_sim_time:=true &
 RVIZ_PID=$!
+
+# Fleet manager: single instance managing ALL robots (HTTP bridge to Nav2 goals)
+FLEET_ROBOTS="${FLEET_ROBOTS:-tinyRobot1,tinyRobot2,tinyRobot3,tinyRobot4}"
+echo "[simulation-world] Starting fleet manager for robots: ${FLEET_ROBOTS}..."
+ROBOT_NAMES="${FLEET_ROBOTS}" python3 /opt/rmf/scripts/fleet_manager.py \
+  --ros-args -p use_sim_time:=true &
+FLEET_MGR_PID=$!
+
+# Fleet adapter: single instance with FULL config — coordinates all robots
+# through rmf_traffic_schedule for proper intra-fleet negotiation
+FLEET_CONFIG="/opt/rmf/config/collision_test_fleet_config.yaml"
+NAV_GRAPH="/opt/rmf/config/collision_test_nav_graph.yaml"
+
+echo "[simulation-world] Waiting 30s for traffic schedule + Nav2 discovery..."
+sleep 30
+
+echo "[simulation-world] Starting fleet adapter (all robots, single instance)..."
+for attempt in 1 2 3 4 5 6 7 8; do
+  echo "[simulation-world] Fleet adapter attempt ${attempt}/8..."
+  ros2 run rmf_demos_fleet_adapter fleet_adapter \
+    -c "${FLEET_CONFIG}" -n "${NAV_GRAPH}" -sim \
+    --ros-args -p use_sim_time:=true -p server_uri:="${SERVER_URI}" &
+  FLEET_PID=$!
+  sleep 20
+  if kill -0 ${FLEET_PID} 2>/dev/null; then
+    echo "[simulation-world] Fleet adapter running (pid ${FLEET_PID})"
+    break
+  fi
+  echo "[simulation-world] Fleet adapter exited, retrying in 15s..."
+  sleep 15
+done
 
 wait ${SIM_PID}

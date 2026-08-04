@@ -101,11 +101,10 @@ class RMFPatrolDispatcher(Node):
         self.get_logger().info('Fleet registered, dispatching cross patrols')
         self.dispatched = True
 
-        now_ms = int(self.get_clock().now().nanoseconds / 1e6)
-        self._dispatch_patrol(self.robot_0, self.robot_0_dest, now_ms)
-        self._dispatch_patrol(self.robot_1, self.robot_1_dest, now_ms)
-        self._dispatch_patrol(self.robot_2, self.robot_2_dest, now_ms + 10000)
-        self._dispatch_patrol(self.robot_3, self.robot_3_dest, now_ms + 10000)
+        self._dispatch_patrol(self.robot_0, self.robot_0_dest)
+        self._dispatch_patrol(self.robot_1, self.robot_1_dest)
+        self._dispatch_patrol(self.robot_2, self.robot_2_dest)
+        self._dispatch_patrol(self.robot_3, self.robot_3_dest)
 
     def _dispatch_patrol(self, robot_name, destination, unix_millis=None):
         request_id = str(uuid.uuid4())
