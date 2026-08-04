@@ -15,8 +15,8 @@ echo "[${ROBOT_NAME}] Zenoh router: ${ZENOH_ROUTER_ENDPOINT}"
 
 # Create a per-robot fleet config by filtering the upstream config to only
 # include this robot. Each robot pod runs its own fleet adapter instance.
-ORIGINAL_CONFIG="$(ros2 pkg prefix rmf_demos)/share/rmf_demos/config/office/tinyRobot_config.yaml"
-NAV_GRAPH="$(ros2 pkg prefix rmf_demos_maps)/share/rmf_demos_maps/maps/office/nav_graphs/0.yaml"
+ORIGINAL_CONFIG="/opt/rmf/config/collision_test_fleet_config.yaml"
+NAV_GRAPH="/opt/rmf/config/collision_test_nav_graph.yaml"
 FILTERED_CONFIG="/tmp/${ROBOT_NAME}_config.yaml"
 
 echo "[${ROBOT_NAME}] Filtering fleet config to robot [${ROBOT_NAME}] with bidding enabled..."
@@ -99,19 +99,18 @@ ros2 launch /opt/rmf/demos/common/launch/nav2_robot.launch.xml \
   slam_params_file:="${SLAM_PARAMS}" &
 NAV2_PID=$!
 
-# Start RMF-Nav2 bridge
-echo "[${ROBOT_NAME}] Starting RMF-Nav2 bridge..."
-python3 /opt/rmf/scripts/rmf_nav2_bridge.py --ros-args \
-  -p robot_name:="${ROBOT_NAME}" \
-  -p fleet_name:="tinyRobot" &
-BRIDGE_PID=$!
+# Start fleet manager (FastAPI bridge: fleet adapter HTTP → Nav2 goals)
+echo "[${ROBOT_NAME}] Starting fleet manager (HTTP → Nav2 bridge)..."
+ROBOT_NAME="${ROBOT_NAME}" python3 /opt/rmf/scripts/fleet_manager.py \
+  --ros-args -p use_sim_time:=true &
+FLEET_MGR_PID=$!
 
 # Update cleanup function
 cleanup() {
-  echo "[${ROBOT_NAME}] Cleaning up tf_publisher, nav2, bridge, and zenoh daemon..."
+  echo "[${ROBOT_NAME}] Cleaning up tf_publisher, nav2, fleet_manager, and zenoh daemon..."
   kill ${TF_PUB_PID} 2>/dev/null || true
   kill ${NAV2_PID} 2>/dev/null || true
-  kill ${BRIDGE_PID} 2>/dev/null || true
+  kill ${FLEET_MGR_PID} 2>/dev/null || true
   kill ${ZENOHD_PID} 2>/dev/null || true
 }
 trap cleanup EXIT

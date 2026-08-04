@@ -1,0 +1,33 @@
+levels:
+  L1:
+    vertices:
+      # Main corridor (y=0) — direct path between robot start positions
+      - [-4.0, 0.0, {name: "wp_left", is_holding_point: true, is_parking_spot: true}]
+      - [-1.5, 0.0, {name: "wp_left_mid", is_holding_point: true}]
+      - [0.0, 0.0, {name: "wp_center", is_holding_point: true}]
+      - [1.5, 0.0, {name: "wp_right_mid", is_holding_point: true}]
+      - [4.0, 0.0, {name: "wp_right", is_holding_point: true, is_parking_spot: true}]
+      # Bypass lane (y=2) — alternative route for collision avoidance
+      - [-1.5, 2.0, {name: "bp_left", is_holding_point: true}]
+      - [0.0, 2.0, {name: "bp_center", is_holding_point: true}]
+      - [1.5, 2.0, {name: "bp_right", is_holding_point: true}]
+    lanes:
+      # Main corridor — bidirectional
+      - [0, 1, {speed_limit: 0.15}]
+      - [1, 0, {speed_limit: 0.15}]
+      - [1, 2, {speed_limit: 0.15}]
+      - [2, 1, {speed_limit: 0.15}]
+      - [2, 3, {speed_limit: 0.15}]
+      - [3, 2, {speed_limit: 0.15}]
+      - [3, 4, {speed_limit: 0.15}]
+      - [4, 3, {speed_limit: 0.15}]
+      # Bypass lane — bidirectional
+      - [5, 6, {speed_limit: 0.15}]
+      - [6, 5, {speed_limit: 0.15}]
+      - [6, 7, {speed_limit: 0.15}]
+      - [7, 6, {speed_limit: 0.15}]
+      # Main-to-bypass connections — bidirectional
+      - [1, 5, {speed_limit: 0.15}]
+      - [5, 1, {speed_limit: 0.15}]
+      - [3, 7, {speed_limit: 0.15}]
+      - [7, 3, {speed_limit: 0.15}]

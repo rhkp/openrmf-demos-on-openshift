@@ -52,8 +52,8 @@ dispatch:
   # Robot-as-pod mode dispatch (optional)
   robotMode:
     enabled: true  # Enable automatic task dispatch in robot-pod mode
-    command: /opt/rmf/scripts/dispatch-opposing-goals-wrapper.sh
-    readyWaitSeconds: 60
+    command: /opt/rmf/scripts/dispatch-rmf-patrol-wrapper.sh
+    readyWaitSeconds: 90
 
 rmfWeb:
   enabled: true

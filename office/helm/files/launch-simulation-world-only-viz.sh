@@ -27,6 +27,7 @@ cleanup() {
   echo "[simulation-world] Cleaning up..."
   kill ${GZ_GUI_PID:-} 2>/dev/null || true
   kill ${GT_ODOM_PID:-} 2>/dev/null || true
+  kill ${TRAFFIC_SCHED_PID:-} 2>/dev/null || true
   kill ${GLOBAL_TF_PID:-} 2>/dev/null || true
   kill ${RVIZ_PID:-} 2>/dev/null || true
   kill ${OPENBOX_PID:-} 2>/dev/null || true
@@ -93,6 +94,14 @@ echo "[simulation-world] Starting ground-truth odom publisher..."
 python3 /opt/rmf/scripts/ground_truth_odom.py --ros-args -p use_sim_time:=true \
   -p gz_world_name:=collision_test &
 GT_ODOM_PID=$!
+
+# RMF traffic schedule: central database for trajectory conflict detection
+# and multi-robot negotiation. Fleet adapters in robot pods register
+# trajectories here; conflicts trigger automatic rerouting/holding.
+echo "[simulation-world] Starting RMF traffic schedule node..."
+ros2 run rmf_traffic_ros2 rmf_traffic_schedule_node --ros-args \
+  -p use_sim_time:=true &
+TRAFFIC_SCHED_PID=$!
 
 # Global TF publisher: publishes robot TF on global /tf for RViz
 # (robot pods publish on namespaced /{robot}/tf for Nav2/SLAM)
