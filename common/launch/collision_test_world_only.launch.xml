@@ -36,6 +36,20 @@
            to="/tinyRobot2/scan" />
   </node>
 
+  <node pkg="ros_gz_bridge" exec="parameter_bridge"
+    args="/world/collision_test/model/tinyRobot3/link/lidar_link/sensor/lidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan"
+    name="lidar_bridge_robot3">
+    <remap from="/world/collision_test/model/tinyRobot3/link/lidar_link/sensor/lidar/scan"
+           to="/tinyRobot3/scan" />
+  </node>
+
+  <node pkg="ros_gz_bridge" exec="parameter_bridge"
+    args="/world/collision_test/model/tinyRobot4/link/lidar_link/sensor/lidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan"
+    name="lidar_bridge_robot4">
+    <remap from="/world/collision_test/model/tinyRobot4/link/lidar_link/sensor/lidar/scan"
+           to="/tinyRobot4/scan" />
+  </node>
+
   <!-- cmd_vel bridges: Nav2 (ROS2) to DiffDrive (gz-sim) -->
   <node pkg="ros_gz_bridge" exec="parameter_bridge"
     args="/model/tinyRobot1/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist"
@@ -47,6 +61,18 @@
     args="/model/tinyRobot2/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist"
     name="cmd_vel_bridge_robot2">
     <remap from="/model/tinyRobot2/cmd_vel" to="/tinyRobot2/cmd_vel" />
+  </node>
+
+  <node pkg="ros_gz_bridge" exec="parameter_bridge"
+    args="/model/tinyRobot3/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist"
+    name="cmd_vel_bridge_robot3">
+    <remap from="/model/tinyRobot3/cmd_vel" to="/tinyRobot3/cmd_vel" />
+  </node>
+
+  <node pkg="ros_gz_bridge" exec="parameter_bridge"
+    args="/model/tinyRobot4/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist"
+    name="cmd_vel_bridge_robot4">
+    <remap from="/model/tinyRobot4/cmd_vel" to="/tinyRobot4/cmd_vel" />
   </node>
 
 </launch>
