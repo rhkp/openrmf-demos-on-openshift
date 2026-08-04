@@ -115,17 +115,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Find upstream fleet_adapter launch file
-FLEET_ADAPTER_LAUNCH="$(ros2 pkg prefix rmf_demos_fleet_adapter)/share/rmf_demos_fleet_adapter/launch/fleet_adapter.launch.xml"
-
-# Launch fleet adapter with retry (RMF Schedule Node may not be ready yet)
+# Launch fleet adapter directly (NOT the upstream launch file, which also starts
+# its own fleet_manager that would conflict with ours on port 22011).
 for attempt in 1 2 3 4 5; do
   echo "[${ROBOT_NAME}] Fleet adapter attempt ${attempt}/5..."
-  ros2 launch "${FLEET_ADAPTER_LAUNCH}" \
-    use_sim_time:=true \
-    "nav_graph_file:=${NAV_GRAPH}" \
-    "config_file:=${FILTERED_CONFIG}" \
-    "server_uri:=${SERVER_URI}" &
+  ros2 run rmf_demos_fleet_adapter fleet_adapter \
+    -- -c "${FILTERED_CONFIG}" -n "${NAV_GRAPH}" -sim \
+    --ros-args -p use_sim_time:=true -p server_uri:="${SERVER_URI}" &
   FLEET_PID=$!
   sleep 15
   if kill -0 ${FLEET_PID} 2>/dev/null; then
