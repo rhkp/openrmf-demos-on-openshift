@@ -113,11 +113,12 @@ COPY common/models/TinyRobot2/ ${RMF_WS}/install/rmf_demos_assets/share/rmf_demo
 RUN MODELS_DIR="${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models" && \
     ln -sf "../TinyRobot2" "${MODELS_DIR}/Open-RMF/TinyRobot2"
 
-# 6b. Copy shared helper scripts, launch files, and config files
+# 6b. Copy shared helper scripts, launch files, config files, and custom worlds
 COPY common/scripts/ /opt/rmf/scripts/
 COPY common/launch/ /opt/rmf/demos/common/launch/
 COPY common/config/ /opt/rmf/config/
 COPY common/models/ /opt/rmf/models/
+COPY common/worlds/ /opt/rmf/worlds/
 
 # 7. Copy per-demo scripts (add a COPY line when introducing a new demo)
 COPY office/scripts/ /opt/rmf/demos/office/scripts/

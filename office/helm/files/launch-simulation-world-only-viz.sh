@@ -69,15 +69,13 @@ if [ -n "${ZENOH_ROUTER_ENDPOINT:-}" ]; then
   export ZENOH_CONFIG_OVERRIDE="connect/endpoints=[\"tcp/localhost:7447\"];scouting/multicast/enabled=false"
 fi
 
-echo "[simulation-world] Launching office world-only HEADLESS (EGL+GPU rendering)..."
-echo "[simulation-world] RMF server_uri=${SERVER_URI}"
+echo "[simulation-world] Launching collision-test world HEADLESS (EGL+GPU rendering)..."
 
 # Unset DISPLAY so ogre2 uses EGL (NVIDIA GPU) instead of GLX (Xvfb software mesa).
 # This is critical for gpu_lidar render-to-texture to produce scan data.
-env -u DISPLAY ros2 launch /opt/rmf/demos/common/launch/office_world_only.launch.xml \
+env -u DISPLAY ros2 launch /opt/rmf/demos/common/launch/collision_test_world_only.launch.xml \
   use_sim_time:=true \
-  headless:=1 \
-  "server_uri:=${SERVER_URI}" &
+  headless:=1 &
 SIM_PID=$!
 
 # Wait for simulation to start
@@ -92,7 +90,8 @@ GZ_GUI_PID=$!
 
 # Ground-truth odometry: reads Gazebo world poses via gz-transport subprocess
 echo "[simulation-world] Starting ground-truth odom publisher..."
-python3 /opt/rmf/scripts/ground_truth_odom.py --ros-args -p use_sim_time:=true &
+python3 /opt/rmf/scripts/ground_truth_odom.py --ros-args -p use_sim_time:=true \
+  -p gz_world_name:=collision_test &
 GT_ODOM_PID=$!
 
 # Global TF publisher: publishes robot TF on global /tf for RViz

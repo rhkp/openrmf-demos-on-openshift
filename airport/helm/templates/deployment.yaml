@@ -210,7 +210,7 @@ spec:
             {{- toYaml .Values.resources.yieldController | nindent 12 }}
           env:
             - name: YIELDING_GOAL_X
-              value: {{ (index .Values.robots.instances 0).goalX | default "10.0" | quote }}
+              value: {{ (index .Values.robots.instances 0).goalX | default "3.0" | quote }}
             - name: YIELDING_GOAL_Y
               value: {{ (index .Values.robots.instances 0).goalY | default "0.0" | quote }}
             - name: YIELDING_GOAL_YAW

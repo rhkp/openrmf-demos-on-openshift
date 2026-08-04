@@ -252,7 +252,7 @@ spec:
             - name: YIELDING_ROBOT
               value: {{ (index .Values.robots.instances 1).name | quote }}
             - name: YIELDING_GOAL_X
-              value: "10.0"
+              value: "3.0"
             - name: YIELDING_GOAL_Y
               value: "0.0"
             - name: YIELDING_GOAL_YAW

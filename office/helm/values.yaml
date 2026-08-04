@@ -14,7 +14,7 @@ pullSecret:
   name: ""
 
 serviceAccount:
-  create: true
+  create: false
   name: rmf-demo
 
 demo:
