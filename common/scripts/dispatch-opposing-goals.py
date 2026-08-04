@@ -45,8 +45,8 @@ class OpposingGoalDispatcher(Node):
 
         self.dispatched = False
         self.robot_state = {
-            self.robot_0: {'active': False, 'retries': 0},
-            self.robot_1: {'active': False, 'retries': 0},
+            self.robot_0: {'active': False, 'retries': 0, 'ever_accepted': False},
+            self.robot_1: {'active': False, 'retries': 0, 'ever_accepted': False},
         }
 
         self.get_logger().info(
@@ -114,6 +114,7 @@ class OpposingGoalDispatcher(Node):
 
         self.get_logger().info(f"{robot_name}: goal accepted")
         self.robot_state[robot_name]['active'] = True
+        self.robot_state[robot_name]['ever_accepted'] = True
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(
             lambda f, name=robot_name, c=client, t=target: self._result_cb(f, name, c, t)
@@ -145,6 +146,12 @@ class OpposingGoalDispatcher(Node):
 
     def _maybe_retry(self, robot_name, client, target):
         state = self.robot_state[robot_name]
+        if state['ever_accepted']:
+            self.get_logger().info(
+                f"{robot_name}: goal was previously accepted, not retrying "
+                f"(yield controller handles resumption)"
+            )
+            return
         if state['retries'] >= self.max_retries:
             self.get_logger().error(
                 f"{robot_name}: exhausted {self.max_retries} retries, giving up"

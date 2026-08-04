@@ -5,7 +5,7 @@ source /opt/rmf/scripts/ros-env.sh
 
 ROBOT_0="${ROBOT_0:-tinyRobot1}"
 ROBOT_1="${ROBOT_1:-tinyRobot2}"
-GOAL_DISTANCE="${GOAL_DISTANCE:-3.0}"
+GOAL_DISTANCE="${GOAL_DISTANCE:-7.0}"
 READY_WAIT_SECONDS="${READY_WAIT_SECONDS:-60}"
 
 echo "[collision-test] Waiting ${READY_WAIT_SECONDS}s for fleet adapters..."

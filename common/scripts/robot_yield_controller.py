@@ -4,8 +4,8 @@ Priority-based yield controller for two-robot head-on collision avoidance.
 
 Monitors both robots' positions and headings. When a head-on scenario is
 detected, the lower-priority robot yields by backing up via Nav2's BackUp
-behavior action, waiting for the priority robot to pass, then resuming
-its original navigation goal.
+behavior action, then waits for the priority robot to complete its goal
+before resuming its own navigation.
 """
 
 import rclpy
@@ -16,8 +16,9 @@ import threading
 from enum import Enum
 
 from geometry_msgs.msg import PoseStamped
-from nav2_msgs.action import NavigateToPose, BackUp, Wait
+from nav2_msgs.action import NavigateToPose, BackUp
 from action_msgs.msg import GoalStatus
+from action_msgs.msg import GoalStatusArray
 
 
 class YieldState(Enum):
@@ -26,6 +27,7 @@ class YieldState(Enum):
     BACKING_UP = 2
     WAITING = 3
     RESUMING = 4
+    DONE = 5
 
 
 class RobotYieldController(Node):
@@ -62,6 +64,7 @@ class RobotYieldController(Node):
 
         self.priority_pose = None
         self.yielding_pose = None
+        self.priority_goal_succeeded = False
 
         self.create_subscription(
             PoseStamped,
@@ -73,6 +76,11 @@ class RobotYieldController(Node):
             f'/{self.yielding_robot}/world_pose',
             self._yielding_pose_cb, 10
         )
+        self.create_subscription(
+            GoalStatusArray,
+            f'/{self.priority_robot}/navigate_to_pose/_action/status',
+            self._priority_goal_status_cb, 10
+        )
 
         self.nav_client = ActionClient(
             self, NavigateToPose,
@@ -81,10 +89,6 @@ class RobotYieldController(Node):
         self.backup_client = ActionClient(
             self, BackUp,
             f'/{self.yielding_robot}/backup'
-        )
-        self.wait_client = ActionClient(
-            self, Wait,
-            f'/{self.yielding_robot}/wait'
         )
 
         self.yielding_goal_handle = None
@@ -101,6 +105,13 @@ class RobotYieldController(Node):
 
     def _yielding_pose_cb(self, msg):
         self.yielding_pose = msg
+
+    def _priority_goal_status_cb(self, msg):
+        for status in msg.status_list:
+            if status.status == GoalStatus.STATUS_SUCCEEDED:
+                if not self.priority_goal_succeeded:
+                    self.get_logger().info("Priority robot reached its goal!")
+                self.priority_goal_succeeded = True
 
     def _extract_pose(self, pose_stamped):
         x = pose_stamped.pose.position.x
@@ -161,13 +172,19 @@ class RobotYieldController(Node):
                     self._cancel_yielding_goal()
 
             elif self.state == YieldState.WAITING:
-                dist = self._get_distance()
-                if dist > self.resume_distance and not self._is_head_on():
+                if self.priority_goal_succeeded:
                     self.get_logger().info(
-                        f"Priority robot passed (distance={dist:.2f}m). Resuming..."
+                        "Priority robot completed goal, resuming yielding robot..."
                     )
                     self.state = YieldState.RESUMING
                     self._resume_goal()
+                else:
+                    dist = self._get_distance()
+                    self.get_logger().info(
+                        f"Waiting for priority robot to complete goal... "
+                        f"(distance: {dist:.2f}m)",
+                        throttle_duration_sec=10.0
+                    )
 
     def _cancel_yielding_goal(self):
         self.get_logger().info(f"Canceling {self.yielding_robot} navigation goal")
@@ -177,8 +194,6 @@ class RobotYieldController(Node):
             self._start_backup()
             return
 
-        # Send a dummy goal to preempt any active NavigateToPose, then immediately
-        # cancel it. Position doesn't matter since we cancel within milliseconds.
         preempt_goal = NavigateToPose.Goal()
         preempt_goal.pose.header.frame_id = f'{self.yielding_robot}/map'
         preempt_goal.pose.header.stamp = self.get_clock().now().to_msg()
@@ -239,7 +254,9 @@ class RobotYieldController(Node):
         result_future.add_done_callback(self._on_backup_done)
 
     def _on_backup_done(self, future):
-        self.get_logger().info("Backup complete, waiting for priority robot to pass...")
+        self.get_logger().info(
+            "Backup complete, waiting for priority robot to reach its goal..."
+        )
         with self.state_lock:
             self.state = YieldState.WAITING
 
@@ -278,7 +295,8 @@ class RobotYieldController(Node):
             self.get_logger().info("Navigation resumed")
 
         with self.state_lock:
-            self.state = YieldState.MONITORING
+            self.state = YieldState.DONE
+            self.get_logger().info("Yield sequence complete — controller done")
 
 
 def main():

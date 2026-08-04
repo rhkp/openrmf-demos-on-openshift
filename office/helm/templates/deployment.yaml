@@ -222,6 +222,8 @@ spec:
               value: {{ (index .Values.robots.instances 0).name | quote }}
             - name: ROBOT_1
               value: {{ (index .Values.robots.instances 1).name | quote }}
+            - name: GOAL_DISTANCE
+              value: "7.0"
             {{- if .Values.zenoh.enabled }}
             - name: ZENOH_ROUTER_ENDPOINT
               value: {{ printf "tcp/%s-zenoh-router:%v" (include "openrmf-office.fullname" .) .Values.zenoh.port | quote }}
@@ -252,7 +254,7 @@ spec:
             - name: YIELDING_ROBOT
               value: {{ (index .Values.robots.instances 1).name | quote }}
             - name: YIELDING_GOAL_X
-              value: "3.0"
+              value: "7.0"
             - name: YIELDING_GOAL_Y
               value: "0.0"
             - name: YIELDING_GOAL_YAW
