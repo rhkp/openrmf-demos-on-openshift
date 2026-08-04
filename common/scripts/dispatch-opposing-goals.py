@@ -156,10 +156,13 @@ class OpposingGoalDispatcher(Node):
             f"{robot_name}: retrying in {self.retry_delay:.0f}s "
             f"(attempt {state['retries'] + 1}/{self.max_retries + 1})"
         )
-        self.create_timer(
-            self.retry_delay,
-            lambda name=robot_name, c=client, t=target: self._send_goal(c, name, t),
-        )
+
+        def one_shot_retry():
+            timer.cancel()
+            self.destroy_timer(timer)
+            self._send_goal(client, robot_name, target)
+
+        timer = self.create_timer(self.retry_delay, one_shot_retry)
 
 
 def main():
