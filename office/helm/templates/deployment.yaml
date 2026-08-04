@@ -218,6 +218,45 @@ spec:
           env:
             - name: READY_WAIT_SECONDS
               value: {{ .Values.dispatch.robotMode.readyWaitSeconds | quote }}
+            - name: ROBOT_0
+              value: {{ (index .Values.robots.instances 0).name | quote }}
+            - name: ROBOT_1
+              value: {{ (index .Values.robots.instances 1).name | quote }}
+            {{- if .Values.zenoh.enabled }}
+            - name: ZENOH_ROUTER_ENDPOINT
+              value: {{ printf "tcp/%s-zenoh-router:%v" (include "openrmf-office.fullname" .) .Values.zenoh.port | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: ros-logs
+              mountPath: /opt/rmf/.ros
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/ros-env.sh
+              subPath: ros-env.sh
+        {{- end }}
+
+        {{- if gt (len .Values.robots.instances) 1 }}
+        - name: yield-controller
+          image: {{ .Values.image.fullRef | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/opt/rmf/scripts/launch-yield-controller.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.resources.yieldController | nindent 12 }}
+          env:
+            - name: PRIORITY_ROBOT
+              value: {{ (index .Values.robots.instances 0).name | quote }}
+            - name: YIELDING_ROBOT
+              value: {{ (index .Values.robots.instances 1).name | quote }}
+            - name: YIELDING_GOAL_X
+              value: "10.0"
+            - name: YIELDING_GOAL_Y
+              value: "0.0"
+            - name: YIELDING_GOAL_YAW
+              value: "0.0"
             {{- if .Values.zenoh.enabled }}
             - name: ZENOH_ROUTER_ENDPOINT
               value: {{ printf "tcp/%s-zenoh-router:%v" (include "openrmf-office.fullname" .) .Values.zenoh.port | quote }}
