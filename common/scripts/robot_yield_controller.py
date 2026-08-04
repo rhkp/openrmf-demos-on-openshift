@@ -15,7 +15,7 @@ import math
 import threading
 from enum import Enum
 
-from nav_msgs.msg import Odometry
+from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateToPose, BackUp, Wait
 from action_msgs.msg import GoalStatus
 
@@ -60,18 +60,18 @@ class RobotYieldController(Node):
         self.state = YieldState.MONITORING
         self.state_lock = threading.Lock()
 
-        self.priority_odom = None
-        self.yielding_odom = None
+        self.priority_pose = None
+        self.yielding_pose = None
 
         self.create_subscription(
-            Odometry,
-            f'/{self.priority_robot}/odom',
-            self._priority_odom_cb, 10
+            PoseStamped,
+            f'/{self.priority_robot}/world_pose',
+            self._priority_pose_cb, 10
         )
         self.create_subscription(
-            Odometry,
-            f'/{self.yielding_robot}/odom',
-            self._yielding_odom_cb, 10
+            PoseStamped,
+            f'/{self.yielding_robot}/world_pose',
+            self._yielding_pose_cb, 10
         )
 
         self.nav_client = ActionClient(
@@ -96,17 +96,17 @@ class RobotYieldController(Node):
             f"yielding={self.yielding_robot}, detection={self.detection_distance}m"
         )
 
-    def _priority_odom_cb(self, msg):
-        self.priority_odom = msg
+    def _priority_pose_cb(self, msg):
+        self.priority_pose = msg
 
-    def _yielding_odom_cb(self, msg):
-        self.yielding_odom = msg
+    def _yielding_pose_cb(self, msg):
+        self.yielding_pose = msg
 
-    def _extract_pose(self, odom):
-        x = odom.pose.pose.position.x
-        y = odom.pose.pose.position.y
-        oz = odom.pose.pose.orientation.z
-        ow = odom.pose.pose.orientation.w
+    def _extract_pose(self, pose_stamped):
+        x = pose_stamped.pose.position.x
+        y = pose_stamped.pose.position.y
+        oz = pose_stamped.pose.orientation.z
+        ow = pose_stamped.pose.orientation.w
         yaw = 2.0 * math.atan2(oz, ow)
         return x, y, yaw
 
@@ -118,11 +118,11 @@ class RobotYieldController(Node):
         return angle
 
     def _is_head_on(self):
-        if self.priority_odom is None or self.yielding_odom is None:
+        if self.priority_pose is None or self.yielding_pose is None:
             return False
 
-        px, py, p_yaw = self._extract_pose(self.priority_odom)
-        yx, yy, y_yaw = self._extract_pose(self.yielding_odom)
+        px, py, p_yaw = self._extract_pose(self.priority_pose)
+        yx, yy, y_yaw = self._extract_pose(self.yielding_pose)
 
         dx = yx - px
         dy = yy - py
@@ -141,10 +141,10 @@ class RobotYieldController(Node):
                 heading_diff_y < self.heading_tolerance)
 
     def _get_distance(self):
-        if self.priority_odom is None or self.yielding_odom is None:
+        if self.priority_pose is None or self.yielding_pose is None:
             return float('inf')
-        px, py, _ = self._extract_pose(self.priority_odom)
-        yx, yy, _ = self._extract_pose(self.yielding_odom)
+        px, py, _ = self._extract_pose(self.priority_pose)
+        yx, yy, _ = self._extract_pose(self.yielding_pose)
         dx = yx - px
         dy = yy - py
         return math.sqrt(dx * dx + dy * dy)
@@ -177,21 +177,14 @@ class RobotYieldController(Node):
             self._start_backup()
             return
 
-        # Send a goal at the robot's current position to preempt any active goal,
-        # then immediately cancel it. This works regardless of which client
-        # originally sent the goal.
-        if self.yielding_odom is None:
-            self._start_backup()
-            return
-
-        yx, yy, y_yaw = self._extract_pose(self.yielding_odom)
+        # Send a dummy goal to preempt any active NavigateToPose, then immediately
+        # cancel it. Position doesn't matter since we cancel within milliseconds.
         preempt_goal = NavigateToPose.Goal()
         preempt_goal.pose.header.frame_id = f'{self.yielding_robot}/map'
         preempt_goal.pose.header.stamp = self.get_clock().now().to_msg()
-        preempt_goal.pose.pose.position.x = yx
-        preempt_goal.pose.pose.position.y = yy
-        preempt_goal.pose.pose.orientation.z = math.sin(y_yaw / 2.0)
-        preempt_goal.pose.pose.orientation.w = math.cos(y_yaw / 2.0)
+        preempt_goal.pose.pose.position.x = 0.0
+        preempt_goal.pose.pose.position.y = 0.0
+        preempt_goal.pose.pose.orientation.w = 1.0
 
         send_future = self.nav_client.send_goal_async(preempt_goal)
         send_future.add_done_callback(self._on_preempt_accepted)

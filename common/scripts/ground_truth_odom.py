@@ -15,6 +15,7 @@ import threading
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import PoseStamped
 
 DEFAULT_ROBOTS = ['tinyRobot1', 'tinyRobot2']
 DEFAULT_GZ_WORLD = 'sim_world'
@@ -32,6 +33,10 @@ class GroundTruthOdom(Node):
 
         self.odom_pubs = {
             r: self.create_publisher(Odometry, f'/{r}/odom', 10)
+            for r in self.robots
+        }
+        self.world_pose_pubs = {
+            r: self.create_publisher(PoseStamped, f'/{r}/world_pose', 10)
             for r in self.robots
         }
         self.initial_poses = {}
@@ -141,6 +146,15 @@ class GroundTruthOdom(Node):
                 odom.pose.pose.orientation.z = math.sin(odom_yaw / 2.0)
                 odom.pose.pose.orientation.w = math.cos(odom_yaw / 2.0)
                 self.odom_pubs[name].publish(odom)
+
+                world_pose = PoseStamped()
+                world_pose.header.stamp = odom.header.stamp
+                world_pose.header.frame_id = 'world'
+                world_pose.pose.position.x = cur['x']
+                world_pose.pose.position.y = cur['y']
+                world_pose.pose.orientation.z = cur['qz']
+                world_pose.pose.orientation.w = cur['qw']
+                self.world_pose_pubs[name].publish(world_pose)
 
 
 def main():
