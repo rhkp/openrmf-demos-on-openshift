@@ -18,9 +18,7 @@ while true; do
   # then check all required topics at once from the captured output
   TOPIC_LIST=$(timeout 30 ros2 topic list 2>/dev/null || true)
 
-  if echo "${TOPIC_LIST}" | grep -Fxq "/clock" && \
-     echo "${TOPIC_LIST}" | grep -Fxq "/tf" && \
-     echo "${TOPIC_LIST}" | grep -Fxq "/tf_static"; then
+  if echo "${TOPIC_LIST}" | grep -Fxq "/clock"; then
     echo "[wait-world] Gazebo world simulation is ready."
     break
   fi

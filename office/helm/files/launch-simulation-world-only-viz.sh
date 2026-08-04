@@ -99,7 +99,7 @@ GT_ODOM_PID=$!
 # and multi-robot negotiation. Fleet adapters in robot pods register
 # trajectories here; conflicts trigger automatic rerouting/holding.
 echo "[simulation-world] Starting RMF traffic schedule node..."
-ros2 run rmf_traffic_ros2 rmf_traffic_schedule_node --ros-args \
+ros2 run rmf_traffic_ros2 rmf_traffic_schedule --ros-args \
   -p use_sim_time:=true &
 TRAFFIC_SCHED_PID=$!
 
