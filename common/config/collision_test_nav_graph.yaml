@@ -2,10 +2,10 @@ levels:
   L1:
     vertices:
       # Cardinal endpoints (robot start/end positions)
-      - [-4.0, 0.0, {name: "wp_west", is_holding_point: true, is_parking_spot: true}]
-      - [4.0, 0.0, {name: "wp_east", is_holding_point: true, is_parking_spot: true}]
-      - [0.0, 4.0, {name: "wp_north", is_holding_point: true, is_parking_spot: true}]
-      - [0.0, -4.0, {name: "wp_south", is_holding_point: true, is_parking_spot: true}]
+      - [-4.0, 0.0, {name: "wp_west", is_holding_point: true, is_parking_spot: true, is_charger: true}]
+      - [4.0, 0.0, {name: "wp_east", is_holding_point: true, is_parking_spot: true, is_charger: true}]
+      - [0.0, 4.0, {name: "wp_north", is_holding_point: true, is_parking_spot: true, is_charger: true}]
+      - [0.0, -4.0, {name: "wp_south", is_holding_point: true, is_parking_spot: true, is_charger: true}]
       # Cardinal midpoints (junctions to bypass ring)
       - [-1.5, 0.0, {name: "wp_west_mid", is_holding_point: true}]
       - [1.5, 0.0, {name: "wp_east_mid", is_holding_point: true}]
