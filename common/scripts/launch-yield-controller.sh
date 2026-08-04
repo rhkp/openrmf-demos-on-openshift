@@ -3,23 +3,8 @@ set -euo pipefail
 
 source /opt/rmf/scripts/ros-env.sh
 
-ZENOH_ROUTER_ENDPOINT="${ZENOH_ROUTER_ENDPOINT:?ZENOH_ROUTER_ENDPOINT must be set}"
-
-export ZENOH_ROUTER_CONFIG_OVERRIDE="connect/endpoints=[\"${ZENOH_ROUTER_ENDPOINT}\"];scouting/multicast/enabled=false"
-
-echo "[yield-controller] Starting local Zenoh session daemon..."
-ros2 run rmw_zenoh_cpp rmw_zenohd &
-ZENOHD_PID=$!
-
-cleanup() {
-  echo "[yield-controller] Cleaning up zenoh daemon..."
-  kill ${ZENOHD_PID} 2>/dev/null || true
-}
-trap cleanup EXIT
-
-sleep 8
-
-export ZENOH_CONFIG_OVERRIDE="connect/endpoints=[\"tcp/localhost:7447\"];scouting/multicast/enabled=false"
+# ros-env.sh already sets ZENOH_CONFIG_OVERRIDE to connect to the central Zenoh router.
+# No local daemon needed — same pattern as fleet-monitor and task-dispatch.
 
 YIELDING_GOAL_X="${YIELDING_GOAL_X:-0.0}"
 YIELDING_GOAL_Y="${YIELDING_GOAL_Y:-0.0}"
