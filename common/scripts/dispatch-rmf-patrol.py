@@ -101,16 +101,17 @@ class RMFPatrolDispatcher(Node):
         self.get_logger().info('Fleet registered, dispatching cross patrols')
         self.dispatched = True
 
-        self._dispatch_patrol(self.robot_0, self.robot_0_dest)
-        self._dispatch_patrol(self.robot_1, self.robot_1_dest)
-        self._dispatch_patrol(self.robot_2, self.robot_2_dest)
-        self._dispatch_patrol(self.robot_3, self.robot_3_dest)
+        now_ms = int(self.get_clock().now().nanoseconds / 1e6)
+        self._dispatch_patrol(self.robot_0, self.robot_0_dest, now_ms)
+        self._dispatch_patrol(self.robot_1, self.robot_1_dest, now_ms)
+        self._dispatch_patrol(self.robot_2, self.robot_2_dest, now_ms + 10000)
+        self._dispatch_patrol(self.robot_3, self.robot_3_dest, now_ms + 10000)
 
-    def _dispatch_patrol(self, robot_name, destination):
+    def _dispatch_patrol(self, robot_name, destination, unix_millis=None):
         request_id = str(uuid.uuid4())
 
-        now = self.get_clock().now()
-        unix_millis = int(now.nanoseconds / 1e6)
+        if unix_millis is None:
+            unix_millis = int(self.get_clock().now().nanoseconds / 1e6)
 
         task_request = {
             'category': 'patrol',
