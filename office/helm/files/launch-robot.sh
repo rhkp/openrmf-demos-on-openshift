@@ -29,8 +29,10 @@ robots = config.get('rmf_fleet', {}).get('robots', {})
 if robot_name not in robots:
     print(f'ERROR: robot [{robot_name}] not found in config. Available: {list(robots.keys())}', file=sys.stderr)
     sys.exit(1)
-# Filter to single robot
+# Filter to single robot and give it a unique fleet name so the traffic
+# schedule uses inter-fleet negotiation between separate adapters
 config['rmf_fleet']['robots'] = {robot_name: robots[robot_name]}
+config['rmf_fleet']['name'] = f'fleet_{robot_name}'
 
 # Keep bidding enabled so robots participate in RMF task dispatch
 # and traffic schedule negotiation for collision avoidance

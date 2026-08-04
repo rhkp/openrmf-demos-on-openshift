@@ -62,6 +62,7 @@ class RMFPatrolDispatcher(Node):
         self.fleet_ready = False
         self.dispatched = False
         self.pending_responses = {}
+        self.robot_fleet_map = {}
 
         self.get_logger().info(
             f'RMF Patrol Dispatcher (4 robots): '
@@ -74,11 +75,10 @@ class RMFPatrolDispatcher(Node):
         self.create_timer(2.0, self._check_and_dispatch)
 
     def _fleet_state_cb(self, msg):
-        if msg.name != self.fleet_name:
-            return
         for robot in msg.robots:
-            if robot.name not in self.robots_seen:
-                self.get_logger().info(f'Discovered robot: {robot.name}')
+            if robot.name in self.all_robots and robot.name not in self.robots_seen:
+                self.get_logger().info(f'Discovered robot: {robot.name} (fleet: {msg.name})')
+                self.robot_fleet_map[robot.name] = msg.name
             self.robots_seen.add(robot.name)
         if (all(r in self.robots_seen for r in self.all_robots)
                 and not self.fleet_ready):
@@ -123,7 +123,7 @@ class RMFPatrolDispatcher(Node):
         payload = {
             'type': 'robot_task_request',
             'robot': robot_name,
-            'fleet': self.fleet_name,
+            'fleet': self.robot_fleet_map.get(robot_name, self.fleet_name),
             'request': task_request,
             'unix_millis_earliest_start_time': unix_millis,
             'priority': {'type': 'binary', 'value': 0},
