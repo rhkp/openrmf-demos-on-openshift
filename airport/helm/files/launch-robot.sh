@@ -97,25 +97,14 @@ python3 /opt/rmf/scripts/rmf_nav2_bridge.py --ros-args \
   -p fleet_name:="tinyRobot" &
 BRIDGE_PID=$!
 
-# Start autonomous frontier exploration for SLAM mapping using explore_lite
-echo "[${ROBOT_NAME}] Starting explore_lite..."
-EXPLORE_PARAMS="/tmp/${ROBOT_NAME}_explore_params.yaml"
-sed "s/ROBOT_PLACEHOLDER/${ROBOT_NAME}/g" /opt/rmf/config/explore_params.yaml > "${EXPLORE_PARAMS}"
-
-ros2 run explore_lite explore --ros-args \
-  --params-file "${EXPLORE_PARAMS}" \
-  -p use_sim_time:=true \
-  -r __ns:=/"${ROBOT_NAME}" \
-  -r /tf:=tf \
-  -r /tf_static:=tf_static &
-EXPLORE_PID=$!
+# Goal-based navigation: goals are dispatched externally via dispatch-opposing-goals.py
+# (explore_lite removed — SLAM map builds incrementally as robots navigate to fixed goals)
 
 cleanup() {
-  echo "[${ROBOT_NAME}] Cleaning up tf_publisher, nav2, bridge, explore, and zenoh daemon..."
+  echo "[${ROBOT_NAME}] Cleaning up tf_publisher, nav2, bridge, and zenoh daemon..."
   kill ${TF_PUB_PID} 2>/dev/null || true
   kill ${NAV2_PID} 2>/dev/null || true
   kill ${BRIDGE_PID} 2>/dev/null || true
-  kill ${EXPLORE_PID} 2>/dev/null || true
   kill ${ZENOHD_PID} 2>/dev/null || true
 }
 trap cleanup EXIT

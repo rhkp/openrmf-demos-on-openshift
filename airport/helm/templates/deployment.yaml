@@ -196,6 +196,37 @@ spec:
               mountPath: /opt/rmf/scripts/ros-env.sh
               subPath: ros-env.sh
 
+        {{- if gt (len .Values.robots.instances) 1 }}
+        - name: yield-controller
+          image: {{ .Values.image.fullRef | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/opt/rmf/scripts/launch-yield-controller.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.resources.yieldController | nindent 12 }}
+          env:
+            - name: YIELDING_GOAL_X
+              value: {{ (index .Values.robots.instances 0).goalX | default "5.35" | quote }}
+            - name: YIELDING_GOAL_Y
+              value: {{ (index .Values.robots.instances 0).goalY | default "-4.98" | quote }}
+            - name: YIELDING_GOAL_YAW
+              value: {{ (index .Values.robots.instances 0).goalYaw | default "0.0" | quote }}
+            {{- if .Values.zenoh.enabled }}
+            - name: ZENOH_ROUTER_ENDPOINT
+              value: {{ printf "tcp/%s-zenoh-router:%v" (include "openrmf-airport.fullname" .) .Values.zenoh.port | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: ros-logs
+              mountPath: /opt/rmf/.ros
+            - name: rmf-scripts
+              mountPath: /opt/rmf/scripts/ros-env.sh
+              subPath: ros-env.sh
+        {{- end }}
+
         {{- if .Values.novnc.enabled }}
         {{- include "openrmf.lib.novnc.containers" (list .) | nindent 8 }}
         {{- end }}
