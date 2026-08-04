@@ -20,11 +20,11 @@ exec python3 /opt/rmf/scripts/robot_yield_controller.py --ros-args \
   -p use_sim_time:=true \
   -p priority_robot:="${PRIORITY_ROBOT}" \
   -p yielding_robot:="${YIELDING_ROBOT}" \
-  -p detection_distance:=3.0 \
+  -p detection_distance:=3.5 \
   -p heading_tolerance:=0.6 \
-  -p backup_distance:=0.5 \
-  -p wait_duration:=5.0 \
-  -p resume_distance:=2.0 \
+  -p backup_distance:=1.5 \
+  -p wait_duration:=8.0 \
+  -p resume_distance:=3.0 \
   -p yielding_goal_x:="${YIELDING_GOAL_X}" \
   -p yielding_goal_y:="${YIELDING_GOAL_Y}" \
   -p yielding_goal_yaw:="${YIELDING_GOAL_YAW}"

@@ -31,8 +31,8 @@ controller_server:
     controller_plugins: ["FollowPath"]
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.2
-      movement_time_allowance: 20.0
+      required_movement_radius: 0.1
+      movement_time_allowance: 40.0
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
@@ -79,7 +79,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.4
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -137,7 +137,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.8
+        inflation_radius: 0.5
       always_send_full_costmap: True
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
@@ -227,7 +227,24 @@ collision_monitor:
     source_timeout: 5.0
     base_shift_correction: True
     stop_pub_timeout: 2.0
-    polygons: ["PolygonStop"]
+    polygons: ["FootprintApproach", "PolygonSlow", "PolygonStop"]
+    FootprintApproach:
+      type: "circle"
+      radius: 1.5
+      action_type: "approach"
+      time_before_collision: 2.0
+      simulation_time_step: 0.1
+      min_points: 3
+      visualize: False
+      enabled: True
+    PolygonSlow:
+      type: "circle"
+      radius: 0.8
+      action_type: "slowdown"
+      slowdown_ratio: 0.3
+      min_points: 3
+      visualize: False
+      enabled: True
     PolygonStop:
       type: "circle"
       radius: 0.35
