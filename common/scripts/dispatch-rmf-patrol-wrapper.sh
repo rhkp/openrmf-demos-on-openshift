@@ -17,7 +17,7 @@ READY_WAIT_SECONDS="${READY_WAIT_SECONDS:-120}"
 echo "[rmf-patrol] Waiting ${READY_WAIT_SECONDS}s for fleet adapters + traffic schedule..."
 sleep "${READY_WAIT_SECONDS}"
 
-echo "[rmf-patrol] Dispatching cross patrols:"
+echo "[rmf-patrol] Dispatching go_to_place tasks (one-way crossing):"
 echo "  ${ROBOT_0}→${ROBOT_0_DEST}, ${ROBOT_1}→${ROBOT_1_DEST}"
 echo "  ${ROBOT_2}→${ROBOT_2_DEST}, ${ROBOT_3}→${ROBOT_3_DEST}"
 
