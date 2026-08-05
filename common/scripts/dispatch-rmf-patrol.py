@@ -98,24 +98,25 @@ class RMFPatrolDispatcher(Node):
             )
             return
 
-        self.get_logger().info('Fleet registered, dispatching go_to_place tasks')
+        self.get_logger().info('Fleet registered, dispatching cross patrols')
         self.dispatched = True
 
-        self._dispatch_go_to_place(self.robot_0, self.robot_0_dest)
-        self._dispatch_go_to_place(self.robot_1, self.robot_1_dest)
-        self._dispatch_go_to_place(self.robot_2, self.robot_2_dest)
-        self._dispatch_go_to_place(self.robot_3, self.robot_3_dest)
+        self._dispatch_patrol(self.robot_0, self.robot_0_dest)
+        self._dispatch_patrol(self.robot_1, self.robot_1_dest)
+        self._dispatch_patrol(self.robot_2, self.robot_2_dest)
+        self._dispatch_patrol(self.robot_3, self.robot_3_dest)
 
-    def _dispatch_go_to_place(self, robot_name, destination, unix_millis=None):
+    def _dispatch_patrol(self, robot_name, destination, unix_millis=None):
         request_id = str(uuid.uuid4())
 
         if unix_millis is None:
             unix_millis = int(self.get_clock().now().nanoseconds / 1e6)
 
         task_request = {
-            'category': 'go_to_place',
+            'category': 'patrol',
             'description': {
-                'one_of': [{'waypoint': destination}],
+                'places': [destination],
+                'rounds': 1,
             },
         }
 
@@ -136,7 +137,7 @@ class RMFPatrolDispatcher(Node):
         self.pending_responses[request_id] = robot_name
 
         self.get_logger().info(
-            f'Dispatched go_to_place: {robot_name} → {destination} '
+            f'Dispatched patrol: {robot_name} → {destination} '
             f'(request_id={request_id[:8]}...)'
         )
 
@@ -150,12 +151,12 @@ class RMFPatrolDispatcher(Node):
             success = response.get('success', False)
             if success:
                 self.get_logger().info(
-                    f'{robot}: go_to_place task accepted by RMF'
+                    f'{robot}: patrol task accepted by RMF'
                 )
             else:
                 errors = response.get('errors', [])
                 self.get_logger().warn(
-                    f'{robot}: go_to_place task rejected: {errors}'
+                    f'{robot}: patrol task rejected: {errors}'
                 )
         except json.JSONDecodeError:
             self.get_logger().warn(
