@@ -12,7 +12,7 @@ Creates a world-aligned TF tree:
 import math
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import TransformStamped, PoseStamped
 from nav_msgs.msg import Odometry
 from tf2_msgs.msg import TFMessage
 from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
@@ -43,6 +43,10 @@ class GlobalTFPublisher(Node):
             self.create_subscription(
                 TFMessage, f'/{robot}/tf',
                 lambda msg, r=robot: self._robot_tf_cb(msg, r), 10)
+
+            self.create_subscription(
+                PoseStamped, f'/{robot}/world_pose',
+                lambda msg, r=robot: self._world_pose_cb(msg, r), 10)
 
         self.get_logger().info(
             f'Global TF publisher started for robots: {self.robots}')
@@ -76,10 +80,25 @@ class GlobalTFPublisher(Node):
                     and t.child_frame_id == f'{robot_name}/odom'):
                 self.tf_broadcaster.sendTransform(t)
 
-    def _odom_cb(self, msg: Odometry, robot_name: str):
-        if robot_name not in self.map_tf_published:
-            self._publish_map_tf_for_robot(robot_name, msg)
+    def _world_pose_cb(self, msg: PoseStamped, robot_name: str):
+        if robot_name in self.map_tf_published:
+            return
+        self.map_tf_published.add(robot_name)
 
+        t_map = TransformStamped()
+        t_map.header.stamp = self.get_clock().now().to_msg()
+        t_map.header.frame_id = 'world'
+        t_map.child_frame_id = f'{robot_name}/map'
+        t_map.transform.translation.x = msg.pose.position.x
+        t_map.transform.translation.y = msg.pose.position.y
+        t_map.transform.translation.z = msg.pose.position.z
+        t_map.transform.rotation = msg.pose.orientation
+        self.static_tf_broadcaster.sendTransform([t_map])
+        self.get_logger().info(
+            f'Published world->{robot_name}/map at '
+            f'({msg.pose.position.x:.2f}, {msg.pose.position.y:.2f})')
+
+    def _odom_cb(self, msg: Odometry, robot_name: str):
         t = TransformStamped()
         t.header.stamp = msg.header.stamp if msg.header.stamp.sec > 0 \
             else self.get_clock().now().to_msg()
@@ -90,20 +109,6 @@ class GlobalTFPublisher(Node):
         t.transform.translation.z = msg.pose.pose.position.z
         t.transform.rotation = msg.pose.pose.orientation
         self.tf_broadcaster.sendTransform(t)
-
-    def _publish_map_tf_for_robot(self, robot_name: str, first_odom: Odometry):
-        """Publish world→map static TF using the robot's first odom as spawn pose."""
-        self.map_tf_published.add(robot_name)
-        now = self.get_clock().now().to_msg()
-
-        t_map = TransformStamped()
-        t_map.header.stamp = now
-        t_map.header.frame_id = 'world'
-        t_map.child_frame_id = f'{robot_name}/map'
-        t_map.transform.rotation.w = 1.0
-        self.static_tf_broadcaster.sendTransform([t_map])
-        self.get_logger().info(
-            f'Published world->{robot_name}/map static TF')
 
 
 def main():

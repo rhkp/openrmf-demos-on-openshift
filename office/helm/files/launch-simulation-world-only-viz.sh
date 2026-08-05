@@ -33,6 +33,7 @@ cleanup() {
   kill ${GT_ODOM_PID:-} 2>/dev/null || true
   kill ${TRAFFIC_SCHED_PID:-} 2>/dev/null || true
   kill ${GLOBAL_TF_PID:-} 2>/dev/null || true
+  kill ${NAV_GRAPH_VIZ_PID:-} 2>/dev/null || true
   kill ${RVIZ_PID:-} 2>/dev/null || true
   kill ${OPENBOX_PID:-} 2>/dev/null || true
   kill ${X11VNC_PID} 2>/dev/null || true
@@ -112,6 +113,10 @@ TRAFFIC_SCHED_PID=$!
 echo "[simulation-world] Starting global TF publisher for RViz..."
 python3 /opt/rmf/scripts/global_tf_publisher.py --ros-args -p use_sim_time:=true &
 GLOBAL_TF_PID=$!
+
+echo "[simulation-world] Starting nav graph visualizer..."
+python3 /opt/rmf/scripts/nav_graph_visualizer.py --ros-args -p use_sim_time:=true &
+NAV_GRAPH_VIZ_PID=$!
 
 echo "[simulation-world] Starting RViz2 for SLAM/lidar visualization..."
 DISPLAY="${DISPLAY_NUM}" rviz2 -d /opt/rmf/config/slam_rviz.rviz --ros-args -p use_sim_time:=true &
