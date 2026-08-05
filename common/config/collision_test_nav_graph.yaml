@@ -13,14 +13,13 @@ levels:
       - [0.0, -1.5, {name: "wp_south_mid", is_holding_point: true}]
       # Center intersection
       - [0.0, 0.0, {name: "wp_center", is_holding_point: true}]
-      # Bypass ring corners (roundabout — one-way clockwise)
-      - [-2.0, 2.0, {name: "bp_nw", is_holding_point: true}]
-      - [2.0, 2.0, {name: "bp_ne", is_holding_point: true}]
-      - [2.0, -2.0, {name: "bp_se", is_holding_point: true}]
-      - [-2.0, -2.0, {name: "bp_sw", is_holding_point: true}]
+      # Bypass ring corners
+      - [-1.5, 1.5, {name: "bp_nw", is_holding_point: true}]
+      - [1.5, 1.5, {name: "bp_ne", is_holding_point: true}]
+      - [1.5, -1.5, {name: "bp_se", is_holding_point: true}]
+      - [-1.5, -1.5, {name: "bp_sw", is_holding_point: true}]
     lanes:
       # E-W corridor: wp_west(0) -- wp_west_mid(4) -- wp_center(8) -- wp_east_mid(5) -- wp_east(1)
-      # All robots converge on center; RMF vicinity (1.5m) forces waiting at midpoints
       - [0, 4, {speed_limit: 0.5}]
       - [4, 0, {speed_limit: 0.5}]
       - [4, 8, {speed_limit: 0.5}]
@@ -38,12 +37,15 @@ levels:
       - [7, 8, {speed_limit: 0.5}]
       - [7, 3, {speed_limit: 0.5}]
       - [3, 7, {speed_limit: 0.5}]
-      # Bypass ring: ONE-WAY CLOCKWISE (roundabout)
-      # nw→ne→se→sw→nw — forces opposing robots onto different arcs
+      # Bypass ring: bp_nw(9) -- bp_ne(10) -- bp_se(11) -- bp_sw(12) -- bp_nw(9)
       - [9, 10, {speed_limit: 0.5}]
+      - [10, 9, {speed_limit: 0.5}]
       - [10, 11, {speed_limit: 0.5}]
+      - [11, 10, {speed_limit: 0.5}]
       - [11, 12, {speed_limit: 0.5}]
+      - [12, 11, {speed_limit: 0.5}]
       - [12, 9, {speed_limit: 0.5}]
+      - [9, 12, {speed_limit: 0.5}]
       # Connectors: cardinal midpoints to bypass ring corners
       - [4, 9, {speed_limit: 0.5}]
       - [9, 4, {speed_limit: 0.5}]
