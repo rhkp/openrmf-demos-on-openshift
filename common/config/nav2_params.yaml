@@ -50,7 +50,7 @@ controller_server:
       use_velocity_scaled_lookahead_dist: false
       min_approach_linear_velocity: 0.05
       approach_velocity_scaling_dist: 0.6
-      use_collision_detection: false
+      use_collision_detection: true
       use_regulated_linear_velocity_scaling: true
       use_fixed_curvature_lookahead: false
       use_cost_regulated_linear_velocity_scaling: false
@@ -77,8 +77,8 @@ local_costmap:
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.4
+        cost_scaling_factor: 2.5
+        inflation_radius: 0.8
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -229,15 +229,15 @@ collision_monitor:
     polygons: ["PolygonSlow", "PolygonStop"]
     PolygonSlow:
       type: "circle"
-      radius: 0.5
+      radius: 1.0
       action_type: "slowdown"
-      slowdown_ratio: 0.5
+      slowdown_ratio: 0.3
       min_points: 3
       visualize: False
       enabled: True
     PolygonStop:
       type: "circle"
-      radius: 0.35
+      radius: 0.6
       action_type: "stop"
       min_points: 3
       visualize: False
