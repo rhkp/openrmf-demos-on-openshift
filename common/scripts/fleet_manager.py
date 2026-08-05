@@ -15,6 +15,7 @@ import math
 import os
 import sys
 import threading
+import time
 import uvicorn
 
 import rclpy
@@ -67,6 +68,8 @@ class RobotState:
         self.nav_goal_handle = None
         self.last_completed_request = None
         self.current_cmd_id = None
+        self.destination_arrival = None
+        self.nav_start_time = None
         self.lock = threading.Lock()
         self.nav_client = None
         self.cmd_vel_pub = None
@@ -149,7 +152,7 @@ class FleetManagerNode(Node):
             },
             'battery': 100.0,
             'last_completed_request': state.last_completed_request,
-            'destination_arrival': None,
+            'destination_arrival': state.destination_arrival,
         }
 
     def navigate(self, robot_name, dest_x, dest_y, dest_yaw, cmd_id,
@@ -184,6 +187,8 @@ class FleetManagerNode(Node):
 
             state.current_cmd_id = cmd_id
             state.nav_active = True
+            state.destination_arrival = None
+            state.nav_start_time = time.time()
 
         goal = NavigateToPose.Goal()
         goal.pose.header.frame_id = f'{robot_name}/map'
@@ -222,6 +227,11 @@ class FleetManagerNode(Node):
             state.nav_goal_handle = None
             if status == GoalStatus.STATUS_SUCCEEDED:
                 state.last_completed_request = state.current_cmd_id
+                duration = time.time() - (state.nav_start_time or 0)
+                state.destination_arrival = {
+                    'cmd_id': state.current_cmd_id,
+                    'duration': duration,
+                }
                 self.get_logger().info(
                     f'{state.name}: Navigation complete '
                     f'(cmd_id={state.current_cmd_id})'
