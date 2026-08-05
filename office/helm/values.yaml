@@ -55,7 +55,7 @@ dispatch:
   robotMode:
     enabled: true  # Enable automatic task dispatch in robot-pod mode
     command: /opt/rmf/scripts/dispatch-rmf-patrol-wrapper.sh
-    readyWaitSeconds: 120
+    readyWaitSeconds: 180
 
 rmfWeb:
   enabled: true

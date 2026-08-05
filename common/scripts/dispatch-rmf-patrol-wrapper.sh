@@ -12,7 +12,7 @@ ROBOT_0_DEST="${ROBOT_0_DEST:-wp_east}"
 ROBOT_1_DEST="${ROBOT_1_DEST:-wp_west}"
 ROBOT_2_DEST="${ROBOT_2_DEST:-wp_north}"
 ROBOT_3_DEST="${ROBOT_3_DEST:-wp_south}"
-READY_WAIT_SECONDS="${READY_WAIT_SECONDS:-120}"
+READY_WAIT_SECONDS="${READY_WAIT_SECONDS:-180}"
 
 echo "[rmf-patrol] Waiting ${READY_WAIT_SECONDS}s for fleet adapters + traffic schedule..."
 sleep "${READY_WAIT_SECONDS}"
