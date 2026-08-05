@@ -288,7 +288,7 @@ def get_status(robot_name: str = Query(default=None)):
 @app.post('/open-rmf/rmf_demos_fm/navigate')
 def navigate(
     robot_name: str = Query(...),
-    cmd_id: str = Query(default='0'),
+    cmd_id: int = Query(default=0),
     request: Request = None,
 ):
     if fleet_node is None:
@@ -315,7 +315,7 @@ def navigate(
 @app.get('/open-rmf/rmf_demos_fm/stop_robot')
 def stop_robot(
     robot_name: str = Query(...),
-    cmd_id: str = Query(default='0'),
+    cmd_id: int = Query(default=0),
 ):
     if fleet_node is None:
         return Response(success=False, msg='Not initialized')
@@ -330,7 +330,7 @@ def stop_robot(
 @app.post('/open-rmf/rmf_demos_fm/start_activity')
 def start_activity(
     robot_name: str = Query(...),
-    cmd_id: str = Query(default='0'),
+    cmd_id: int = Query(default=0),
     request: Request = None,
 ):
     return Response(success=True, msg='No custom activities')
