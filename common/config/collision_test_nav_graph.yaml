@@ -13,11 +13,11 @@ levels:
       - [0.0, -1.5, {name: "wp_south_mid", is_holding_point: true}]
       # Center intersection
       - [0.0, 0.0, {name: "wp_center", is_holding_point: true}]
-      # Bypass ring corners
-      - [-1.5, 1.5, {name: "bp_nw", is_holding_point: true}]
-      - [1.5, 1.5, {name: "bp_ne", is_holding_point: true}]
-      - [1.5, -1.5, {name: "bp_se", is_holding_point: true}]
-      - [-1.5, -1.5, {name: "bp_sw", is_holding_point: true}]
+      # Bypass ring corners (wide ring to avoid 4-robot physical deadlock)
+      - [-2.5, 2.5, {name: "bp_nw", is_holding_point: true}]
+      - [2.5, 2.5, {name: "bp_ne", is_holding_point: true}]
+      - [2.5, -2.5, {name: "bp_se", is_holding_point: true}]
+      - [-2.5, -2.5, {name: "bp_sw", is_holding_point: true}]
     lanes:
       # E-W corridor: wp_west(0) -- wp_west_mid(4) -- wp_center(8) -- wp_east_mid(5) -- wp_east(1)
       - [0, 4, {speed_limit: 0.5}]
