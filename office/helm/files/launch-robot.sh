@@ -42,6 +42,12 @@ NAV2_PARAMS="/tmp/${ROBOT_NAME}_nav2_params.yaml"
 SLAM_PARAMS="/tmp/${ROBOT_NAME}_slam_params.yaml"
 sed "s/ROBOT_PLACEHOLDER/${ROBOT_NAME}/g" /opt/rmf/config/nav2_params.yaml > "${NAV2_PARAMS}"
 sed "s/ROBOT_PLACEHOLDER/${ROBOT_NAME}/g" /opt/rmf/config/slam_toolbox_params.yaml > "${SLAM_PARAMS}"
+
+# Tune collision avoidance: reduce min_points so PolygonStop triggers on small robots
+sed -i '/PolygonStop:/,/enabled:/{s/min_points: 3/min_points: 1/}' "${NAV2_PARAMS}"
+sed -i '/PolygonStop:/,/enabled:/{s/radius: 0.4/radius: 0.5/}' "${NAV2_PARAMS}"
+sed -i '/PolygonSlow:/,/enabled:/{s/min_points: 3/min_points: 2/}' "${NAV2_PARAMS}"
+
 echo "[${ROBOT_NAME}] Generated per-robot params: ${NAV2_PARAMS}, ${SLAM_PARAMS}"
 
 # TF publisher — publishes to namespaced /{robot}/tf topics

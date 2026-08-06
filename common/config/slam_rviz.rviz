@@ -82,7 +82,7 @@ Visualization Manager:
         Depth: 5
         Reliability Policy: Best Effort
       Color Transformer: FlatColor
-      Color: 0; 0; 255
+      Color: 255; 255; 0
       Size (m): 0.05
       Style: Points
 
@@ -106,7 +106,7 @@ Visualization Manager:
         Depth: 5
         Reliability Policy: Best Effort
       Color Transformer: FlatColor
-      Color: 255; 165; 0
+      Color: 0; 100; 255
       Size (m): 0.05
       Style: Points
 
@@ -209,6 +209,46 @@ Visualization Manager:
       Alpha: 0.3
       Color Scheme: costmap
       Draw Behind: false
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Slow Zone (Robot1)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot1/polygon_slow
+        Depth: 1
+        Reliability Policy: Reliable
+      Color: 0; 255; 0
+      Alpha: 0.3
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Stop Zone (Robot1)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot1/polygon_stop
+        Depth: 1
+        Reliability Policy: Reliable
+      Color: 255; 0; 0
+      Alpha: 0.3
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Slow Zone (Robot2)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot2/polygon_slow
+        Depth: 1
+        Reliability Policy: Reliable
+      Color: 0; 255; 0
+      Alpha: 0.3
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Stop Zone (Robot2)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot2/polygon_stop
+        Depth: 1
+        Reliability Policy: Reliable
+      Color: 255; 0; 0
+      Alpha: 0.3
 
     - Class: rviz_default_plugins/TF
       Name: TF
