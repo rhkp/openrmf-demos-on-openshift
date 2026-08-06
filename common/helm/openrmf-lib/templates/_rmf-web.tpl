@@ -202,8 +202,8 @@ data:
         proxy_set_header Host $host;
       }
 
-      location /rmf-traj/ {
-        proxy_pass http://{{ include "openrmf.lib.fullname" $root }}-trajectory:80/;
+      location /rmf-traj {
+        proxy_pass http://{{ include "openrmf.lib.fullname" $root }}-trajectory:80;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -248,6 +248,63 @@ data:
     done
 
     echo "[dashboard-init] Patched dashboard assets (API=${API_URL}, trajectory=${TRAJ_URL})"
+
+    # --- React Router duplicate-context fix ---
+    # The jazzy-nightly build may bundle two copies of React Router's context
+    # module. Router provides contexts from one copy, but hooks read from the
+    # other — hooks see null and the dashboard crashes (blank page).
+    # This detects the duplicate dynamically and patches hooks to use the
+    # Router's contexts. If upstream fixes the duplicate, this is a no-op.
+    #
+    # Detection: In React Router, NavigationContext and LocationContext are
+    # always created as a consecutive pair: NAV=createContext(null),LOC=createContext(null).
+    # The Router renders LOC.Provider with {children:} (distinctive pattern).
+    # We find the Router's pair, then find any duplicate pair via useContext(VAR).location.
+    BUNDLE=$(find /dashboard/assets -name 'index-*.js' -type f | head -1)
+    if [ -n "$BUNDLE" ]; then
+      ROUTER_LOC=$(grep -oE '[A-Za-z0-9_]+\.Provider,[{]children:' "$BUNDLE" | head -1 | sed 's/\.Provider.*//')
+
+      PAIR_RE='[A-Za-z0-9_]+=[A-Za-z0-9_]+\.createContext[(]null[)],[A-Za-z0-9_]+=[A-Za-z0-9_]+\.createContext[(]null[)]'
+      ROUTER_NAV=""
+      if [ -n "$ROUTER_LOC" ]; then
+        ROUTER_NAV=$(grep -oE "$PAIR_RE" "$BUNDLE" | grep ",${ROUTER_LOC}=" | head -1 | sed 's/=.*//')
+      fi
+
+      HOOKS_LOC=""
+      for V in $(grep -oE 'useContext[(][A-Za-z0-9_]+[)]\.location' "$BUNDLE" | sed 's/useContext(//;s/).*//' | sort -u); do
+        if [ -n "$ROUTER_LOC" ] && [ "$V" != "$ROUTER_LOC" ]; then
+          HOOKS_LOC="$V"
+          break
+        fi
+      done
+
+      HOOKS_NAV=""
+      if [ -n "$HOOKS_LOC" ]; then
+        HOOKS_NAV=$(grep -oE "$PAIR_RE" "$BUNDLE" | grep ",${HOOKS_LOC}=" | head -1 | sed 's/=.*//')
+      fi
+
+      FIXED=""
+      if [ -n "$HOOKS_LOC" ] && [ -n "$ROUTER_LOC" ]; then
+        sed -i \
+          -e "s/useContext(${HOOKS_LOC})/useContext(${ROUTER_LOC})/g" \
+          -e "s/${HOOKS_LOC}\.Provider/${ROUTER_LOC}.Provider/g" \
+          "$BUNDLE"
+        FIXED="Loc(${HOOKS_LOC}->${ROUTER_LOC})"
+      fi
+      if [ -n "$HOOKS_NAV" ] && [ -n "$ROUTER_NAV" ] && [ "$HOOKS_NAV" != "$ROUTER_NAV" ]; then
+        sed -i \
+          -e "s/useContext(${HOOKS_NAV})/useContext(${ROUTER_NAV})/g" \
+          -e "s/${HOOKS_NAV}\.Provider/${ROUTER_NAV}.Provider/g" \
+          "$BUNDLE"
+        FIXED="${FIXED:+${FIXED}, }Nav(${HOOKS_NAV}->${ROUTER_NAV})"
+      fi
+
+      if [ -n "$FIXED" ]; then
+        echo "[dashboard-init] Fixed React Router duplicate contexts: ${FIXED}"
+      else
+        echo "[dashboard-init] React Router contexts OK (no duplicate detected)"
+      fi
+    fi
 {{- end }}
 
 {{- define "openrmf.lib.rmfWeb.manifests" -}}

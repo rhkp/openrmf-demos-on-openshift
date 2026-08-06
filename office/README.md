@@ -239,3 +239,38 @@ helm uninstall rmf-office-demo -n "${NAMESPACE}"
 - noVNC needs `xvfb` / `x11vnc` in the simulation image — use a full build, not `SKIP_BUILD=1`, after Dockerfile changes.
 - Run **one demo per namespace** (ROS discovery is pod-local).
 - `office/helm/values.yaml` is local config; commit changes via `values.yaml.example` only.
+
+---
+
+## Known Issues
+
+### RMF Dashboard blank page (React Router duplicate module)
+
+The `demo-dashboard:jazzy-nightly` image bundles two copies of React Router's
+context module. The `BrowserRouter` provides `NavigationContext` and
+`LocationContext` from one copy, but hooks like `useRoutes` and `useLocation`
+read from the other — so hooks always see `null` and the app crashes with a
+blank white page.
+
+The `dashboard-init` container auto-detects and patches both contexts at deploy
+time. Detection is dynamic (minified variable names change per nightly rebuild):
+
+- **LocationContext** — detected via `useContext(VAR).location` vs the Router's
+  `VAR.Provider,{children:}` pattern
+- **NavigationContext** — detected via `createContext(null)` pairs: NavigationContext
+  is always defined immediately before LocationContext in each copy
+
+Check init container logs to verify:
+
+```bash
+oc logs deploy/<release>-rmf-web -c dashboard-init -n <namespace>
+```
+
+- **Fixed:** log shows `Fixed React Router duplicate contexts: Loc(M_->U8), Nav(Kb->Bge)`
+- **No duplicate (upstream fixed):** log shows `React Router contexts OK (no duplicate detected)`
+
+> **Important:** The fix lives in the shared library at
+> `common/helm/openrmf-lib/templates/_rmf-web.tpl`. If you modify that file,
+> you **must** run `helm dependency update office/helm` before
+> `helm upgrade` — otherwise Helm uses the stale packaged tarball and your
+> changes won't deploy.
