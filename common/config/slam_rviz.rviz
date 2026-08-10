@@ -250,6 +250,46 @@ Visualization Manager:
       Color: 255; 0; 0
       Alpha: 0.3
 
+    - Class: rviz_default_plugins/Polygon
+      Name: Slow Zone (Robot3)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot3/polygon_slow
+        Depth: 1
+        Reliability Policy: Reliable
+      Color: 0; 255; 0
+      Alpha: 0.3
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Stop Zone (Robot3)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot3/polygon_stop
+        Depth: 1
+        Reliability Policy: Reliable
+      Color: 255; 0; 0
+      Alpha: 0.3
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Slow Zone (Robot4)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot4/polygon_slow
+        Depth: 1
+        Reliability Policy: Reliable
+      Color: 0; 255; 0
+      Alpha: 0.3
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Stop Zone (Robot4)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot4/polygon_stop
+        Depth: 1
+        Reliability Policy: Reliable
+      Color: 255; 0; 0
+      Alpha: 0.3
+
     - Class: rviz_default_plugins/TF
       Name: TF
       Enabled: true
