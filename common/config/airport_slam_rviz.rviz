@@ -104,6 +104,68 @@ Visualization Manager:
       Color Scheme: costmap
       Draw Behind: false
 
+    - Class: rviz_default_plugins/Map
+      Name: Global Costmap (Robot0)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot_0/global_costmap/costmap
+        Depth: 1
+        Reliability Policy: Reliable
+      Alpha: 0.25
+      Color Scheme: costmap
+      Draw Behind: false
+
+    - Class: rviz_default_plugins/Map
+      Name: Global Costmap (Robot1)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot_1/global_costmap/costmap
+        Depth: 1
+        Reliability Policy: Reliable
+      Alpha: 0.25
+      Color Scheme: costmap
+      Draw Behind: false
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Slow Zone (Robot0)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot_0/polygon_slow
+        Depth: 1
+        Reliability Policy: Reliable
+      Color: 0; 255; 0
+      Alpha: 0.3
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Stop Zone (Robot0)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot_0/polygon_stop
+        Depth: 1
+        Reliability Policy: Reliable
+      Color: 255; 0; 0
+      Alpha: 0.3
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Slow Zone (Robot1)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot_1/polygon_slow
+        Depth: 1
+        Reliability Policy: Reliable
+      Color: 0; 255; 0
+      Alpha: 0.3
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Stop Zone (Robot1)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot_1/polygon_stop
+        Depth: 1
+        Reliability Policy: Reliable
+      Color: 255; 0; 0
+      Alpha: 0.3
+
     - Class: rviz_default_plugins/Pose
       Name: Robot0 Pose
       Enabled: true

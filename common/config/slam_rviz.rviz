@@ -210,6 +210,50 @@ Visualization Manager:
       Color Scheme: costmap
       Draw Behind: false
 
+    - Class: rviz_default_plugins/Map
+      Name: Global Costmap (Robot1)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot1/global_costmap/costmap
+        Depth: 1
+        Reliability Policy: Reliable
+      Alpha: 0.25
+      Color Scheme: costmap
+      Draw Behind: false
+
+    - Class: rviz_default_plugins/Map
+      Name: Global Costmap (Robot2)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot2/global_costmap/costmap
+        Depth: 1
+        Reliability Policy: Reliable
+      Alpha: 0.25
+      Color Scheme: costmap
+      Draw Behind: false
+
+    - Class: rviz_default_plugins/Map
+      Name: Global Costmap (Robot3)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot3/global_costmap/costmap
+        Depth: 1
+        Reliability Policy: Reliable
+      Alpha: 0.25
+      Color Scheme: costmap
+      Draw Behind: false
+
+    - Class: rviz_default_plugins/Map
+      Name: Global Costmap (Robot4)
+      Enabled: true
+      Topic:
+        Value: /tinyRobot4/global_costmap/costmap
+        Depth: 1
+        Reliability Policy: Reliable
+      Alpha: 0.25
+      Color Scheme: costmap
+      Draw Behind: false
+
     - Class: rviz_default_plugins/Polygon
       Name: Slow Zone (Robot1)
       Enabled: true
