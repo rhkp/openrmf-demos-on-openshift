@@ -103,10 +103,29 @@ GT_ODOM_PID=$!
 # RMF traffic schedule: central database for trajectory conflict detection
 # and multi-robot negotiation. Fleet adapters in robot pods register
 # trajectories here; conflicts trigger automatic rerouting/holding.
+#
+# Started this close to the local Zenoh daemon's own startup, its rmw_zenoh_cpp
+# session can fail its one-time graph registration (a race with the daemon's
+# bridge-to-router still stabilizing, seemingly worse under the CPU pressure of
+# Gazebo/RViz/4x Nav2 all cold-starting at once) — the process stays alive and
+# looks healthy (`kill -0` succeeds) but its services never appear in the ROS
+# graph, forever, with no automatic recovery. A process-liveness check can't
+# catch this; verify `/rmf_traffic/register_participant` actually shows up in
+# `ros2 service list`, and restart the node if it doesn't.
 echo "[simulation-world] Starting RMF traffic schedule node..."
-ros2 run rmf_traffic_ros2 rmf_traffic_schedule --ros-args \
-  -p use_sim_time:=true &
-TRAFFIC_SCHED_PID=$!
+for attempt in 1 2 3; do
+  echo "[simulation-world] Traffic schedule attempt ${attempt}/3..."
+  ros2 run rmf_traffic_ros2 rmf_traffic_schedule --ros-args \
+    -p use_sim_time:=true &
+  TRAFFIC_SCHED_PID=$!
+  if /opt/rmf/scripts/wait-for-service.sh /rmf_traffic/register_participant 30; then
+    echo "[simulation-world] Traffic schedule registered (pid ${TRAFFIC_SCHED_PID})"
+    break
+  fi
+  echo "[simulation-world] Traffic schedule did not register in time, restarting..."
+  kill "${TRAFFIC_SCHED_PID}" 2>/dev/null || true
+  sleep 5
+done
 
 # Global TF publisher: publishes robot TF on global /tf for RViz
 # (robot pods publish on namespaced /{robot}/tf for Nav2/SLAM)
@@ -134,8 +153,12 @@ FLEET_MGR_PID=$!
 FLEET_CONFIG="/opt/rmf/config/collision_test_fleet_config.yaml"
 NAV_GRAPH="/opt/rmf/config/collision_test_nav_graph.yaml"
 
-echo "[simulation-world] Waiting 30s for traffic schedule + Nav2 discovery..."
-sleep 30
+# Traffic schedule registration is already confirmed by the retry loop above;
+# this remaining wait is purely for the robot pods' own Nav2 stacks to finish
+# discovery (a separate, legitimate startup cost in different pods we don't
+# have a single readiness signal for here).
+echo "[simulation-world] Waiting 15s for Nav2 discovery in robot pods..."
+sleep 15
 
 echo "[simulation-world] Starting fleet adapter (all robots, single instance)..."
 for attempt in 1 2 3 4 5 6 7 8; do
@@ -145,11 +168,18 @@ for attempt in 1 2 3 4 5 6 7 8; do
     --ros-args -p use_sim_time:=true -p server_uri:="${SERVER_URI}" &
   FLEET_PID=$!
   sleep 20
-  if kill -0 ${FLEET_PID} 2>/dev/null; then
-    echo "[simulation-world] Fleet adapter running (pid ${FLEET_PID})"
+  # `kill -0` only proves the process didn't crash — it can't catch the same
+  # zenoh graph-registration race described above for the traffic schedule
+  # node, which leaves the fleet adapter alive and logging but invisible to
+  # `ros2 node list` and never actually consuming task requests. Confirm it
+  # actually joined the graph before accepting this attempt as successful.
+  if kill -0 ${FLEET_PID} 2>/dev/null \
+      && ros2 node list 2>/dev/null | grep -q '_fleet_adapter$'; then
+    echo "[simulation-world] Fleet adapter running and registered (pid ${FLEET_PID})"
     break
   fi
-  echo "[simulation-world] Fleet adapter exited, retrying in 15s..."
+  echo "[simulation-world] Fleet adapter exited or failed to register, retrying in 15s..."
+  kill "${FLEET_PID}" 2>/dev/null || true
   sleep 15
 done
 
