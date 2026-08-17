@@ -33,6 +33,7 @@ cleanup() {
   kill ${GT_ODOM_PID:-} 2>/dev/null || true
   kill ${TRAFFIC_SCHED_PID:-} 2>/dev/null || true
   kill ${GLOBAL_TF_PID:-} 2>/dev/null || true
+  kill ${MAP_MERGE_PID:-} 2>/dev/null || true
   kill ${NAV_GRAPH_VIZ_PID:-} 2>/dev/null || true
   kill ${RVIZ_PID:-} 2>/dev/null || true
   kill ${OPENBOX_PID:-} 2>/dev/null || true
@@ -132,6 +133,13 @@ done
 echo "[simulation-world] Starting global TF publisher for RViz..."
 python3 /opt/rmf/scripts/global_tf_publisher.py --ros-args -p use_sim_time:=true &
 GLOBAL_TF_PID=$!
+
+# Map merge: stitches each robot's independent slam_toolbox map into one
+# occupancy grid (visualization-only, using the same world->{robot}/map
+# transforms global_tf_publisher.py publishes above).
+echo "[simulation-world] Starting map merge node..."
+python3 /opt/rmf/scripts/map_merge_node.py --ros-args -p use_sim_time:=true &
+MAP_MERGE_PID=$!
 
 echo "[simulation-world] Starting nav graph visualizer..."
 python3 /opt/rmf/scripts/nav_graph_visualizer.py --ros-args -p use_sim_time:=true &
