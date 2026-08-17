@@ -27,9 +27,9 @@ echo "[office/robot-mode/dispatch] Waiting for robot fleet to be ready..."
 echo "[office/robot-mode/dispatch] Fleet ready; waiting ${READY_WAIT_SECONDS}s for all robots to initialize..."
 sleep "${READY_WAIT_SECONDS}"
 
-echo "[office/robot-mode/dispatch] Dispatching patrol to robot fleet: coe -> lounge (3 loops)..."
+echo "[office/robot-mode/dispatch] Dispatching patrol to robot fleet: wp_west -> wp_east (3 loops)..."
 ros2 run rmf_demos_tasks dispatch_patrol \
-  -p coe lounge \
+  -p wp_west wp_east \
   -n 3 \
   --use_sim_time
 
