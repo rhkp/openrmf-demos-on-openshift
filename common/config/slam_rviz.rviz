@@ -62,6 +62,18 @@ Visualization Manager:
       Color Scheme: costmap
       Draw Behind: true
 
+    - Class: rviz_default_plugins/Map
+      Name: Merged Map (All Robots)
+      Enabled: true
+      Topic:
+        Value: /merged_map
+        Depth: 1
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+      Alpha: 1
+      Color Scheme: map
+      Draw Behind: true
+
     - Class: rviz_default_plugins/LaserScan
       Name: Lidar (Robot1)
       Enabled: true

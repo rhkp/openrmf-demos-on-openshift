@@ -1,0 +1,441 @@
+# Hummingbird/RoboStack replacement for common/Dockerfile — office demo only
+# (see hummingbird/README.md for scope/status). Ported from
+# bootc/Containerfile (bootc-fedora-robostack branch), which already solved
+# every RoboStack/colcon/GCC-14 fix documented inline below — only the base
+# image and its package-repo setup differ here (see hummingbird/README.md's
+# "Why Fedora appears in these Containerfiles" for why a Fedora fallback
+# repo is added alongside Hummingbird's own).
+#
+# Build on the build VM (podman, not locally — see project memory on podman
+# stability): podman build -f hummingbird/Containerfile -t <tag> .
+
+# ============================== Stage 1: builder ==============================
+FROM quay.io/hummingbird-community/bootc-os:latest AS builder
+
+# bootc-os ships its own hummingbird.repo, but it doesn't cover the desktop/
+# GL/X11 stack or all the build-tool packages' transitive deps (confirmed
+# via hummingbird/scripts/spike.Containerfile) — add a Fedora 43 fallback.
+# Don't reuse Fedora's own repo file via COPY --from=fedora:43: its baseurl
+# is templated on $releasever, which resolves against bootc-os's own
+# /etc/os-release (ID=hummingbird) instead of "43", producing a 404.
+RUN printf '%s\n' \
+      '[fedora-43]' \
+      'name=Fedora 43 - $basearch' \
+      'baseurl=https://dl.fedoraproject.org/pub/fedora/linux/releases/43/Everything/$basearch/os/' \
+      'enabled=1' \
+      'gpgcheck=0' \
+      'skip_if_unavailable=True' \
+      > /etc/yum.repos.d/fedora-43.repo
+
+ENV MAMBA_ROOT_PREFIX=/opt/micromamba
+ENV PATH=${MAMBA_ROOT_PREFIX}/envs/ros_env/bin:/usr/local/bin:${PATH}
+
+RUN dnf -y install curl tar bzip2 which && dnf clean all
+
+# Install micromamba (single static binary, no python bootstrap needed).
+# bootc-os's minimal filesystem package doesn't pre-create /usr/local/bin
+# (unlike a traditional full-FHS image such as centos-bootc) — create it first.
+RUN mkdir -p /usr/local/bin && \
+    curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C /usr/local/bin/ --strip-components=1 bin/micromamba
+
+# Create the ROS2 Jazzy env from robostack-jazzy + conda-forge.
+# `compilers` is PINNED to 1.11.0 (→ GCC 14.4.0), not left floating: an
+# earlier unpinned build of this same Containerfile (on bootc/centos-bootc)
+# solved to a newer `compilers` 2.0.0 (→ GCC 15.3.0, x86-64-v4 baseline vs
+# the proven build's x86-64-v3) purely because conda-forge published a newer
+# release between runs. GCC 15's stricter linker defaults broke transitive
+# link propagation that GCC 14 tolerated — `rmf_traffic`'s vendored FCL
+# stopped propagating its own `ccd`/`octomap` link deps to consumers
+# (rmf_battery, rmf_traffic_ros2 failed with undefined references), confirmed
+# reproducible (not a parallel build race) and confirmed fixed by pinning
+# back to the exact compiler version proven clean on the bootc lineage. This
+# pin is a conda-forge package version, unaffected by the Fedora 43 vs
+# CentOS Stream 9 base-OS swap.
+RUN micromamba create -y -n ros_env -c robostack-jazzy -c conda-forge \
+      ros-jazzy-desktop-full \
+      ros-jazzy-ros-gz-sim \
+      ros-jazzy-ros-gz-bridge \
+      ros-jazzy-ros-gz-image \
+      ros-jazzy-ros-gz-interfaces \
+      ros-jazzy-navigation2 \
+      ros-jazzy-nav2-bringup \
+      ros-jazzy-slam-toolbox \
+      ros-jazzy-rmw-zenoh-cpp \
+      ros-jazzy-robot-localization \
+      ros-jazzy-pointcloud-to-laserscan \
+      ros-jazzy-laser-filters \
+      colcon-common-extensions \
+      compilers=1.11.0 \
+    && micromamba clean -a -y
+
+# NOTE: `SHELL ["micromamba", "run", ...]` is silently ignored by podman under
+# OCI image format (only works with `docker` format) — so every RUN below
+# sources RoboStack's setup.bash directly instead of relying on SHELL.
+ENV ROS_ENV_SETUP=${MAMBA_ROOT_PREFIX}/envs/ros_env/setup.bash
+
+# Verification checks — fail the build loudly if any of these don't work
+RUN bash -c "source ${ROS_ENV_SETUP} && ros2 doctor --report | head -50"
+RUN bash -c "source ${ROS_ENV_SETUP} && gz sim --version"
+RUN bash -c "source ${ROS_ENV_SETUP} && python3 -c 'import rclpy; print(\"rclpy OK\")'"
+RUN bash -c "source ${ROS_ENV_SETUP} && ros2 pkg list | grep -E '^(nav2_bringup|slam_toolbox|rmw_zenoh_cpp|ros_gz_sim)$'"
+
+# rosdep normally targets a system package manager (apt/dnf); against a conda
+# env there's no clean mapping, so skip it and let colcon/CMake surface exactly
+# what's missing.
+# tinyxml-devel: menge_vendor needs the original TinyXML (not TinyXml2) via
+# pkg-config. On CentOS Stream 9 this only came from EPEL; on Fedora 43 it
+# ships natively, so no epel-release equivalent is needed here.
+RUN dnf -y install git gcc gcc-c++ cmake make patch libatomic boost-devel tinyxml-devel asio-devel && \
+    dnf clean all
+
+# Fedora 43 ships Boost 1.90.0, which has aggressively purged Boost.Asio's
+# entire pre-2018 API surface: not just the io_service alias for io_context
+# (dropped ~Boost 1.87), but also io_service::post/work/reset, the old
+# ip::tcp::resolver::query/iterator interface, and
+# basic_waitable_timer::expires_from_now — all confirmed via real build
+# errors against websocketpp's bundled Boost.Asio transport code
+# (transport/asio/{connection,endpoint}.hpp), which is written against that
+# old API wholesale, not just one renamed symbol. This isn't a single alias
+# to restore; websocketpp's Boost.Asio transport is incompatible with
+# current Boost, full stop. CentOS Stream 9's much older system Boost
+# (~1.75) predates all of this, which is why it worked unmodified on the
+# bootc lineage. Fedora has no compat boost package (checked: `dnf search
+# boost` returns only 1.90.0-based packages).
+#
+# Fix: -DASIO_STANDALONE (below) switches websocketpp's internal
+# `websocketpp::lib::asio` alias to plain `::asio` (dnf-installed
+# asio-devel) instead of `boost::asio`. Standalone Asio — a separate,
+# independently-maintained library, not a Boost fork — has kept this old
+# API surface intact far longer than Boost has (confirmed empirically:
+# this alone made rmf_visualization_schedule build clean with zero
+# errors). The one real casualty is rmf_websocket, which hardcodes
+# boost::asio types directly in its own source rather than going through
+# websocketpp's abstraction — patched separately below to match.
+# websocketpp (rmf_visualization_schedule): CMake looks for it via find_package
+# in CONFIG mode — EPEL's websocketpp-devel is header-only with no CMake
+# config, so it wouldn't satisfy that lookup even if installed. conda-forge
+# packages it with proper CMake integration instead.
+RUN micromamba install -y -n ros_env -c robostack-jazzy -c conda-forge websocketpp && \
+    micromamba clean -a -y
+
+# fiona (rmf_demos_maps / rmf_traffic_editor_test_maps): building_map_generator
+# needs it for map/world/crowdsim/navgraph generation at build time.
+# DELIBERATELY NOT INSTALLED — confirmed via `--freeze-installed` that fiona
+# genuinely conflicts with numpy/GDAL versions already pinned by the rest of
+# ros_env (not just a slow solve: the frozen solver fails fast and explicitly).
+# Forcing it would mean letting the solver change already-working package
+# versions elsewhere in this large environment, which risks breaking things
+# that currently work, for stock demo maps our office demo doesn't even use —
+# it renders the custom collision_test.world, not any of rmf_demos_maps's
+# generated worlds. Both packages are excluded from workspace discovery via
+# COLCON_IGNORE further down (right after the vcs import), not built —
+# rmf_demos and rmf_demos_gz (which our launch files actually use) declare
+# them as exec_depend, and colcon needs them fully absent from its package
+# graph, not merely failed/skipped, or it still errors looking for their
+# install-time environment hooks. See the COLCON_IGNORE comment for why.
+# CAVEAT: this means airport_terminal/hotel stock maps are NOT available in
+# this image — only the office demo (custom collision_test.world) is in
+# scope. Closing this gap for airport/hotel parity is tracked separately
+# (see hummingbird/README.md Phase 3).
+
+# rclcpp optionally links LTTng-UST tracing hooks. The conda env already
+# ships a compatible lttng-ust (2.13.9, incl. liblttng-ust-common.so.1) as an
+# rclcpp dependency — the system lttng-ust-devel predates the
+# liblttng-ust-common split, so installing it would link against the wrong
+# ABI. The actual gap is just the unversioned dev symlinks conda's package
+# omits — add those instead of pulling in the system package.
+RUN ln -sf liblttng-ust.so.1.0.0 ${MAMBA_ROOT_PREFIX}/envs/ros_env/lib/liblttng-ust.so && \
+    ln -sf liblttng-ust-common.so.1 ${MAMBA_ROOT_PREFIX}/envs/ros_env/lib/liblttng-ust-common.so
+
+# Built here (not /tmp) because ament's generated CMake configs and
+# environment hooks embed this absolute install prefix — stage 2 copies
+# `install/` to this exact same path, so it must match.
+# m-explore-ros2 (frontier exploration, common/Dockerfile clones it too) is
+# DELIBERATELY NOT included — its explore_lite package fails to link against
+# RoboStack's conda-provided visualization_msgs/map_msgs Python-binding .so
+# files (a RoboStack CMake-resolution quirk unrelated to anything above), and
+# it isn't used by the office/collision_test demo (confirmed: no reference to
+# explore_lite/frontier/m-explore anywhere in office/helm's active deployment
+# path). Not worth debugging for a feature out of scope — revisit when
+# implementing the SLAM-merge extension (see demo-extension-backlog memory).
+ENV RMF_WS=/opt/rmf/rmf_demos_ws
+WORKDIR ${RMF_WS}
+RUN mkdir -p src && cd src && \
+    git clone https://github.com/open-rmf/rmf_demos.git && \
+    cd rmf_demos && git checkout 3f7b9727ce39ba421ba5727eed9d8612f1c85f66
+
+# rmf_demos depends on core Open-RMF packages (rmf_traffic, rmf_building_map_tools,
+# rmf_fleet_adapter core lib, etc.) — on Ubuntu these come prebuilt via the
+# ros-jazzy-rmf-dev apt metapackage; here there's no conda equivalent, so pull
+# the same source repos Open-RMF's own build farm uses via their rmf.repos vcs manifest.
+# vcstool needs pkg_resources, which newer setuptools no longer bundles by default
+RUN bash -c "source ${ROS_ENV_SETUP} && pip install --no-cache-dir 'setuptools<81' vcstool"
+# rmf.repos vendors its own rmf_demos pinned at `main` (drop it, we clone our own
+# pinned copy above) and — like every other entry — floats on `main`/`master`
+# with no version pin at all upstream; filter-rmf-repos.py pins everything to
+# the commits captured via `git ls-remote` alongside the rmf_demos/ament_cmake
+# pins above, so this build doesn't silently drift on a future rebuild.
+COPY hummingbird/scripts/filter-rmf-repos.py /tmp/filter-rmf-repos.py
+RUN curl -sL https://raw.githubusercontent.com/open-rmf/rmf/main/rmf.repos -o /tmp/rmf.repos.orig && \
+    bash -c "source ${ROS_ENV_SETUP} && python3 /tmp/filter-rmf-repos.py /tmp/rmf.repos.orig /tmp/rmf.repos"
+RUN cd src && \
+    bash -c "source ${ROS_ENV_SETUP} && vcs import . < /tmp/rmf.repos"
+
+# rmf_demos_maps / rmf_traffic_editor_test_maps both need fiona for build-time
+# codegen we don't use (see the fiona note above). `--packages-skip` doesn't
+# work here even though it sounds like it should: colcon's CMake build task
+# sources the environment hook (package.sh) of every dependency declared in a
+# package's package.xml — including exec_depend — for any package colcon
+# still knows about, and a *skipped* package is still "known", just not
+# built, so rmf_demos's build fails looking for an install dir that was never
+# created (confirmed: `--packages-skip rmf_demos_maps rmf_traffic_editor_test_maps`
+# turned "rmf_demos_maps/rmf_traffic_editor_test_maps fail" into "rmf_demos
+# fails looking for rmf_demos_maps/share/rmf_demos_maps/package.sh instead).
+# COLCON_IGNORE removes them from colcon's package discovery entirely, so
+# they're treated like any other dependency living outside this workspace
+# (silently not sourced) — the same way conda-provided packages already are.
+RUN touch src/rmf_demos/rmf_demos_maps/COLCON_IGNORE \
+    src/rmf/rmf_traffic_editor/rmf_traffic_editor_test_maps/COLCON_IGNORE
+
+# rmf.repos's vendor packages (pybind11_json_vendor, menge_vendor,
+# nlohmann_json_schema_validator_vendor) need ament_cmake_vendor_package, a
+# generic ROS2 build-tool package that RoboStack's recipe doesn't package
+# even though it packages the rest of ament_cmake. It lives in the
+# ament/ament_cmake monorepo — only pull that one subdirectory, not the whole
+# repo, since the rest of ament_cmake is already provided by conda and would
+# otherwise create duplicate-package conflicts.
+RUN cd src && \
+    git clone https://github.com/ament/ament_cmake.git /tmp/ament_cmake_src && \
+    cd /tmp/ament_cmake_src && git checkout 5741cff5b9f83253bf3521bd8f44108fde3504ad && cd - && \
+    mv /tmp/ament_cmake_src/ament_cmake_vendor_package src/ && \
+    rm -rf /tmp/ament_cmake_src
+
+# Genuine upstream bug in rmf_robot_sim_common, not an environment gap: it
+# calls std::max/std::min with mismatched int/double arguments (bare unqualified
+# abs() resolves to C's integer-only version, not the double-overloaded
+# std::abs), which GCC rejects under strict template argument deduction.
+# Whatever built the upstream Ubuntu binaries apparently tolerated this; ours
+# doesn't. No existing std::abs in this file, so a blanket qualify is safe.
+RUN sed -i 's/\babs(/std::abs(/g' \
+    src/rmf/rmf_simulation/rmf_robot_sim_common/src/utils.cpp
+
+# rmf_websocket hardcodes boost::asio types directly (BroadcastClient.cpp's
+# io_context member, BroadcastServer.cpp, ClientWebSocketEndpoint's
+# constructor parameter and post() calls) instead of going through
+# websocketpp's own `websocketpp::lib::asio` abstraction. Under
+# -DASIO_STANDALONE (below), websocketpp itself switches to plain ::asio,
+# but rmf_websocket's boost::asio::io_context* and a standalone
+# ::asio::io_context* are distinct, non-interchangeable types — passing one
+# where the other is expected won't compile, and `using namespace boost;`
+# in ClientWebSocketEndpoint.cpp makes bare `asio::` ambiguous between the
+# two once both are in scope (confirmed real build failures for both
+# symptoms). boost::asio and standalone asio provide the same modern
+# free-function API (io_context, post, dispatch) — safe to blanket-replace
+# every `boost::asio::` reference with `asio::` so this package is
+# internally consistent with websocketpp under standalone mode, rather
+# than patching call sites piecemeal.
+#
+# This file list is exhaustive, not discovered one failure at a time:
+# every real (non-vendored — rmf_websocket bundles its own unused copy of
+# websocketpp as a git submodule under rmf_websocket/websocketpp/, ignore
+# it) .cpp/.hpp file in the package was individually checked via
+# `curl .../<file> | grep -c boost::asio` against the exact pinned commit;
+# these 4 are the complete set with any hits, everything else (both
+# Broadcast*.hpp headers, RingBuffer.hpp, examples/, test/) has zero.
+RUN sed -i 's/boost::asio/asio/g' \
+    src/rmf/rmf_ros2/rmf_websocket/src/rmf_websocket/BroadcastClient.cpp \
+    src/rmf/rmf_ros2/rmf_websocket/src/rmf_websocket/BroadcastServer.cpp \
+    src/rmf/rmf_ros2/rmf_websocket/src/rmf_websocket/client/ClientWebSocketEndpoint.hpp \
+    src/rmf/rmf_ros2/rmf_websocket/src/rmf_websocket/client/ClientWebSocketEndpoint.cpp && \
+    sed -i '/^using namespace boost;$/d' \
+    src/rmf/rmf_ros2/rmf_websocket/src/rmf_websocket/client/ClientWebSocketEndpoint.cpp
+
+# GCC's system compiler is stricter than whatever built the upstream Ubuntu
+# binaries about requiring `#include <cassert>` before using assert() — hits
+# rmf_traffic's vendored FCL (collision library) in multiple files (confirmed
+# at least convex-inl.h and taylor_model-inl.h; likely more), a latent
+# portability issue in that vendored code, not ours. Rather than whack-a-mole
+# patching every affected file, force-include <cassert> into every
+# translation unit via -include, fixing all instances at once.
+#
+# NOTE: --symlink-install is deliberately dropped — newer setuptools breaks
+# `colcon build --symlink-install` for ament_python packages with
+# "error: option --editable not recognized" (known colcon/setuptools
+# incompatibility, unrelated to our stack). A shipped container image
+# doesn't need dev-mode symlinks anyway, so a plain build is correct here.
+#
+# NOTE: no `| tail` here deliberately — piping colcon's output through tail
+# made the RUN step's exit code come from `tail` (always 0) instead of
+# `colcon build`, silently masking failed builds as successful Docker layers.
+#
+# CC/CXX: don't use the system dnf-installed gcc/g++ — it causes a libstdc++
+# ABI mismatch (GLIBCXX/CXXABI undefined references) against conda-forge-built
+# libraries like librclcpp.so. `micromamba run -n ros_env` activates the
+# conda-forge `compilers` package's own matched toolchain via its activation
+# hooks (RoboStack's own documented approach for custom workspaces).
+#
+# CPATH: rmf_traffic_ros2 (and possibly others) use <Eigen/Geometry> without
+# their own find_package(Eigen3) — rmf_traffic's CMake config doesn't forward
+# that transitive include dir to consumers. Conda installs Eigen headers under
+# include/eigen3/, not top-level include/, so add it globally rather than
+# patch every downstream package with the same gap.
+#
+# LIBRARY_PATH / PKG_CONFIG_PATH: conda-forge's `compilers` package ships its
+# own isolated sysroot and does NOT search /usr/include or /usr/lib64 by
+# default (deliberate, for hermetic conda builds) — unlike a normal system
+# compiler. pkg-config also actively strips "-I/usr/include" from its output
+# (assumes that's always a default search path, which is false here), so
+# tinyxml.pc's Cflags get stripped down to nothing usable even though
+# pkg-config itself resolves fine. Bridge /usr/include and /usr/lib64
+# globally, since any further dnf-installed system dep will hit this same
+# wall.
+#
+# --continue-on-error: without it, colcon cancels whatever else happens to be
+# mid-build (parallel, unrelated packages) the moment ANY package fails —
+# useful as a safety net so one unexpected failure doesn't hide the full
+# picture of everything else. rmf_demos_maps/rmf_traffic_editor_test_maps are
+# already fully excluded from the workspace via COLCON_IGNORE above, so no
+# --packages-skip is needed (or wanted — see the COLCON_IGNORE comment for
+# why that flag alone doesn't actually work here).
+#
+# ASIO_STANDALONE: forces websocketpp's `websocketpp::lib::asio` alias to
+# resolve to plain `::asio` (dnf-installed asio-devel) instead of
+# `boost::asio` — see the asio-devel install comment above for why Fedora
+# 43's Boost 1.90.0 breaks websocketpp's Boost.Asio transport code
+# otherwise, and the rmf_websocket sed patch above for the one package that
+# needed matching changes. No-op for anything that doesn't touch
+# websocketpp/asio headers.
+RUN micromamba run -n ros_env bash -c "source ${ROS_ENV_SETUP} && \
+    export CPATH=\"${MAMBA_ROOT_PREFIX}/envs/ros_env/include/eigen3:/usr/include:\${CPATH}\" && \
+    export LIBRARY_PATH=\"/usr/lib64:\${LIBRARY_PATH}\" && \
+    export PKG_CONFIG_PATH=\"/usr/lib64/pkgconfig:\${PKG_CONFIG_PATH}\" && \
+    export CXXFLAGS=\"-include cassert -fpermissive -DASIO_STANDALONE \${CXXFLAGS}\" && \
+    colcon build --continue-on-error --event-handlers console_direct+"
+
+# Runtime Python deps for fleet_manager.py / dashboard bridge scripts (common/
+# Dockerfile step 2) — install into the conda env's own pip, not the system one.
+# requests: NOT just for the now-excluded building_map_model_downloader (see
+# the fiona/COLCON_IGNORE notes above) — rmf_demos_fleet_adapter's own
+# RobotClientAPI.py independently imports it for its HTTP client, and that
+# package IS in scope (confirmed at runtime: fleet adapter crash-looped with
+# `ModuleNotFoundError: No module named 'requests'` when this was dropped).
+RUN bash -c "source ${ROS_ENV_SETUP} && pip install --no-cache-dir \
+    'fastapi>=0.79.0' 'uvicorn>=0.18.2' pydantic flask-socketio \
+    datamodel_code_generator websockets requests"
+
+# Override stock TinyRobot model with the lidar-equipped version (+ colored
+# variants) before creating the Open-RMF/ Fuel-URI symlink dir, matching
+# common/Dockerfile steps 5c/6 exactly.
+COPY common/models/TinyRobot/ ${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models/TinyRobot/
+COPY common/models/TinyRobot2/ ${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models/TinyRobot2/
+COPY common/models/TinyRobot3/ ${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models/TinyRobot3/
+COPY common/models/TinyRobot4/ ${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models/TinyRobot4/
+RUN MODELS_DIR="${RMF_WS}/install/rmf_demos_assets/share/rmf_demos_assets/models" && \
+    mkdir -p "${MODELS_DIR}/Open-RMF" && \
+    for m in "${MODELS_DIR}"/*/; do \
+      name=$(basename "$m"); \
+      [ "$name" = "Open-RMF" ] && continue; \
+      ln -sf "../${name}" "${MODELS_DIR}/Open-RMF/${name}"; \
+    done
+
+# ============================== Stage 2: runtime ==============================
+FROM quay.io/hummingbird-community/bootc-os:latest
+
+# Same Fedora fallback repo as the builder stage (this is a separate stage,
+# so it needs its own copy of the repo file).
+RUN printf '%s\n' \
+      '[fedora-43]' \
+      'name=Fedora 43 - $basearch' \
+      'baseurl=https://dl.fedoraproject.org/pub/fedora/linux/releases/43/Everything/$basearch/os/' \
+      'enabled=1' \
+      'gpgcheck=0' \
+      'skip_if_unavailable=True' \
+      > /etc/yum.repos.d/fedora-43.repo
+
+ENV MAMBA_ROOT_PREFIX=/opt/micromamba
+ENV PATH=${MAMBA_ROOT_PREFIX}/envs/ros_env/bin:${PATH}
+ENV ROS_ENV_SETUP=${MAMBA_ROOT_PREFIX}/envs/ros_env/setup.bash
+ENV RMF_WS=/opt/rmf/rmf_demos_ws
+ENV ROS_LOG_DIR=/opt/rmf/.ros/log
+ENV HOME=/opt/rmf
+
+# Runtime-only libs: Mesa/EGL/GLX for Gazebo+RViz rendering (GPU path is
+# runtime-injected by the NVIDIA container toolkit/OpenShift GPU operator —
+# see project memory on GPU rendering; the loader stack here just needs to
+# exist) and Xvfb/x11vnc/openbox for the noVNC virtual display, matching
+# common/Dockerfile's apt package list. tinyxml/boost/libatomic runtime libs
+# are needed by the colcon-built binaries copied in below (linked against
+# these at build time in stage 1). xorg-x11-utils is intentionally dropped —
+# genuinely removed from Fedora 43 (not renamed), diagnostic-only, not
+# required by Xvfb/Gazebo/RViz/noVNC themselves (see hummingbird/README.md).
+RUN dnf -y install \
+      mesa-libGL mesa-libEGL mesa-dri-drivers \
+      xorg-x11-server-Xvfb x11vnc openbox \
+      tinyxml boost libatomic \
+    && dnf clean all
+
+# Conda ROS2 env + the colcon workspace built against it, from stage 1.
+COPY --from=builder /opt/micromamba /opt/micromamba
+COPY --from=builder ${RMF_WS}/install ${RMF_WS}/install
+
+# Fix RViz Map display shader for Mesa software rendering (noVNC uses llvmpipe).
+# Mesa's GLSL linker rejects sampler1D + sampler2D on the same program.
+# Replace the palette-based shader with one that hardcodes map colors directly,
+# eliminating the palette texture and the sampler type conflict entirely.
+# Same patch as common/Dockerfile step 4b, retargeted at the conda env's
+# rviz_rendering share dir instead of /opt/ros/jazzy.
+RUN MATERIALS=${MAMBA_ROOT_PREFIX}/envs/ros_env/share/rviz_rendering/ogre_media/materials && \
+    printf '%s\n' \
+      '#version 120' \
+      'varying vec2 UV;' \
+      'uniform sampler2D eight_bit_image;' \
+      'uniform float alpha;' \
+      'void main()' \
+      '{' \
+      '  float val = texture2D(eight_bit_image, UV).x;' \
+      '  float is_unknown = step(0.99, val);' \
+      '  float is_free = step(val, 0.004);' \
+      '  float is_occ = (1.0 - is_unknown) * (1.0 - is_free);' \
+      '  float occ_shade = 1.0 - clamp(val * 255.0 / 100.0, 0.0, 1.0);' \
+      '  vec3 color = is_free * vec3(0.94, 0.94, 0.94)' \
+      '             + is_unknown * vec3(0.6, 0.6, 0.6)' \
+      '             + is_occ * vec3(occ_shade);' \
+      '  gl_FragColor = vec4(color, alpha);' \
+      '}' \
+      > "${MATERIALS}/glsl120/indexed_8bit_image.frag" && \
+    sed -i '/param_named palette/d' \
+      "${MATERIALS}/scripts/indexed_8bit_image.material" && \
+    sed -i '/test_20x20/d' \
+      "${MATERIALS}/scripts/indexed_8bit_image.material"
+
+# Copy shared helper scripts, launch files, config files, and custom worlds —
+# unchanged from common/, plus a hummingbird-specific ros-env.sh that sources
+# the conda env instead of /opt/ros/jazzy (the only two things this migration
+# needs to differ from common/, same as the bootc lineage).
+COPY common/scripts/ /opt/rmf/scripts/
+COPY common/launch/ /opt/rmf/demos/common/launch/
+COPY common/config/ /opt/rmf/config/
+COPY common/models/ /opt/rmf/models/
+COPY common/worlds/ /opt/rmf/worlds/
+COPY hummingbird/scripts/ros-env.sh /opt/rmf/scripts/ros-env.sh
+
+# Per-demo scripts (add a COPY line when introducing a new demo)
+COPY office/scripts/ /opt/rmf/demos/office/scripts/
+COPY hotel/scripts/ /opt/rmf/demos/hotel/scripts/
+COPY airport/scripts/ /opt/rmf/demos/airport/scripts/
+
+RUN find /opt/rmf/scripts /opt/rmf/demos -name '*.sh' -exec chmod +x {} + && \
+    chmod +x /opt/rmf/scripts/wait-for-world.sh
+
+# OpenShift UID/GID pattern:
+#    - USER 1001 for local non-root runs
+#    - group 0 + g+rwX so an assigned arbitrary UID can still write logs
+RUN mkdir -p /opt/rmf/.ros/log && \
+    chown -R 1001:0 /opt/rmf && \
+    chmod -R g+rwX /opt/rmf
+
+USER 1001
+
+WORKDIR /opt/rmf
+
+CMD ["tail", "-f", "/dev/null"]

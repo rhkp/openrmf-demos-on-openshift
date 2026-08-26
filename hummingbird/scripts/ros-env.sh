@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Shared ROS 2 environment for all containers in the RMF demo pod.
+# Hummingbird/RoboStack variant of common/scripts/ros-env.sh — only the base
+# ROS2 source path differs (conda env instead of /opt/ros/jazzy); see
+# hummingbird/README.md.
 # Note: avoid `set -u` — ROS setup.bash references unset vars (e.g. AMENT_TRACE_SETUP_FILES).
 set -eo pipefail
 
 # Callers may enable nounset; disable while sourcing ROS setup scripts.
 set +u
-source {{ .Values.image.rosSetupPath | default "/opt/ros/jazzy/setup.bash" }}
+source /opt/micromamba/envs/ros_env/setup.bash
 source "${RMF_WS}/install/setup.bash"
 
 export RMW_IMPLEMENTATION=rmw_zenoh_cpp
