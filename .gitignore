@@ -18,6 +18,11 @@ credentials.json
 **/values.yaml
 !**/values.yaml.example
 
+# bootc-vm local config (contains a real SSH public key; not secret, but
+# per-deployer like the values.yaml pattern above)
+bootc-vm/config.toml
+!bootc-vm/config.toml.example
+
 # Build artifacts
 **/install/
 **/build/

@@ -225,9 +225,15 @@ the metadata endpoint; matches `bootc-demos`' own proven
 `demos/05-create-ami-deploy-ec2/run.sh` pattern exactly rather than
 reinventing it).
 
-`config.toml` already has a real SSH public key baked in (no EC2 key pair
-needed — fedora-bootc has no cloud-init, so key-pair injection wouldn't work
-anyway, same reasoning `bootc-demos` bakes its own demo user).
+`config.toml` is gitignored (same pattern as this repo's `values.yaml`) —
+copy the template and set your own SSH public key (no EC2 key pair needed;
+fedora-bootc has no cloud-init, so key-pair injection wouldn't work anyway,
+same reasoning `bootc-demos` bakes its own demo user):
+
+```bash
+cp bootc-vm/config.toml.example bootc-vm/config.toml
+# edit bootc-vm/config.toml, replace REPLACE_WITH_YOUR_SSH_PUBLIC_KEY
+```
 
 ```bash
 ./bootc-vm/scripts/build-ami.sh

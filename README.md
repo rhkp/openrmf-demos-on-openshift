@@ -110,9 +110,11 @@ cp airport/helm/values.yaml.example airport/helm/values.yaml
 | `hotel/helm/values.yaml` | Same pattern |
 | `airport/helm/values.yaml` | Same pattern |
 | `common/image.env` | Optional fallback for builds without Helm values |
+| `bootc-vm/config.toml` | SSH public key + disk sizing for the bootc host image build |
 | `.env`, `.env.local` | General secrets |
 
-Committed templates: `values.yaml.example` in each demo's `helm/` folder.
+Committed templates: `values.yaml.example` in each demo's `helm/` folder,
+`bootc-vm/config.toml.example`.
 
 ## How it works
 
