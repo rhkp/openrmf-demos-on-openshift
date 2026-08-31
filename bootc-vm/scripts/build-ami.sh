@@ -55,6 +55,22 @@ for unit in "${BOOTC_VM_DIR}"/containers/*.container; do
   sudo "${PODMAN}" pull "${bound_image}"
 done
 
+# AWS AMI names must be unique per account/region. Rebuilding under the
+# same name fails at the very last step (RegisterImage) after the full
+# disk build + S3 upload + snapshot import already completed — confirmed
+# by hitting this twice. Deregister any prior AMI/snapshot under this name
+# up front instead of wasting a full ~25-30 min cycle finding out at the end.
+existing_ami="$(aws ec2 describe-images --owners self \
+  --filters "Name=name,Values=${AWS_AMI_NAME}" --region "${AWS_REGION}" \
+  --query 'Images[0].ImageId' --output text 2>/dev/null || true)"
+if [[ -n "${existing_ami}" && "${existing_ami}" != "None" ]]; then
+  existing_snap="$(aws ec2 describe-images --image-ids "${existing_ami}" --region "${AWS_REGION}" \
+    --query 'Images[0].BlockDeviceMappings[0].Ebs.SnapshotId' --output text)"
+  echo "Deregistering prior AMI ${existing_ami} (and its snapshot ${existing_snap}) under the name ${AWS_AMI_NAME}..."
+  aws ec2 deregister-image --image-id "${existing_ami}" --region "${AWS_REGION}"
+  aws ec2 delete-snapshot --snapshot-id "${existing_snap}" --region "${AWS_REGION}"
+fi
+
 cred=()
 if [ -d "$HOME/.aws" ]; then
   cred+=(-v "$HOME/.aws:/root/.aws:ro" --env "AWS_PROFILE=${AWS_PROFILE:-default}")

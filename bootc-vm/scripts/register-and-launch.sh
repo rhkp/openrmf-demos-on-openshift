@@ -16,9 +16,10 @@ set -euo pipefail
 
 AWS_AMI_NAME="${AWS_AMI_NAME:-rhkp-openrmf-office-bootc-host}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
-# Gazebo + Nav2 + RViz (software rendering) need more than bootc-demos'
-# generic t3.small default — bump it for this heavier workload.
-INSTANCE_TYPE="${INSTANCE_TYPE:-t3.medium}"
+# gpu_lidar needs a real GPU (software rendering silently produces no scan
+# data — see README.md), and 4 robots' worth of Nav2+SLAM need real
+# headroom beyond bootc-demos' generic t3.small default.
+INSTANCE_TYPE="${INSTANCE_TYPE:-g5.2xlarge}"
 EC2_SUBNET_ID="${EC2_SUBNET_ID:-subnet-61a9f82c}"
 BASE_SECURITY_GROUP="${BASE_SECURITY_GROUP:-sg-01391483230b306d7}"
 NOVNC_SG_NAME="${NOVNC_SG_NAME:-rhkp-rmf-office-bootc-novnc}"

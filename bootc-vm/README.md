@@ -33,9 +33,97 @@ cross-Pod `zenohd` startup race to design around (the OpenShift version
 needed launch-script retry loops for exactly this; those fixes still ship
 inside the image unchanged, they just don't need to work as hard here).
 
-**Scope: office demo only**, core loop — simulation, fleet monitor, patrol
-dispatch, zenoh router, noVNC viewer. The `rmf-web` dashboard (nginx +
-websocket api-server bridge) is deliberately deferred, not silently dropped.
+**Scope: office demo only.** The `rmf-web` dashboard (nginx + websocket
+api-server bridge) is deliberately deferred, not silently dropped.
+
+## The custom world, not the stock one
+
+An earlier version of this deployment ran `RMF_LAUNCH_FILE=office.launch.xml`
+— which is the **stock, unmodified upstream `rmf_demos_gz` office world**,
+not the custom "simple room" (table/sofa/chair, 4 `tinyRobot`s) this
+project actually built. Confirmed directly: `office.launch.xml` is
+unmodified upstream inside the image. The custom world
+(`collision_test.world`) only exists behind the **"robot-as-pod"
+architecture** (`office/helm/templates/robot-deployments.yaml`,
+`ROBOT-AS-POD-IMPLEMENTATION.md`) — `office/helm/values.yaml`'s
+`robots.enabled: true` confirms that split architecture is the actual
+current production setup, not the simpler single-container mode. This
+deployment now replicates that split, one Quadlet unit per what would be a
+separate Pod on OpenShift.
+
+**Script drift, found by diffing directly.** `office/helm/files/` (Helm
+ConfigMap-mounted, always wins over what's baked into the image) has
+diverged from `common/scripts/` baked into
+`quay.io/rhkp/openrmf-openshift-office-demo:nav2-sensors`:
+- `launch-robot.sh`: **substantially different**. The image-baked version
+  spawns its own per-robot fleet adapter; the real (Helm) version doesn't
+  — fleet adaptation is centralized in the simulation container instead.
+  Using the stale baked version would run duplicate/conflicting fleet
+  adapters.
+- `wait-for-world.sh`: Helm version additionally waits for `/tf`+`/tf_static`.
+- `launch-simulation-world-only-viz.sh`: **not in the image at all**.
+- `ros-env.sh`, `launch-fleet-coordinator.sh`, `fleet-coordinator.py`:
+  confirmed identical — no override needed for these.
+
+The 3 diverged files are copied verbatim into `scripts-overlay/` (sourced
+from `office/helm/files/`, the proven versions) and baked into the host
+image at `/opt/rmf-overlay/`, then `Volume=`-mounted over the stale/missing
+paths in the relevant Quadlet units — the same override mechanism Helm's
+ConfigMap achieves on OpenShift, just via the bootc host instead.
+
+## GPU is required, not optional
+
+`launch-simulation-world-only-viz.sh` explicitly unsets `DISPLAY` so
+Gazebo's `gpu_lidar` sensor uses EGL+NVIDIA GPU rendering. Per this
+project's own prior debugging: *gpu_lidar render-to-texture silently
+produces no data on software rendering.* Without a real GPU, robots would
+get empty lidar scans — Nav2/SLAM/collision-avoidance wouldn't actually
+work even though every service would still show `active`. This is why the
+instance type is a GPU instance (`g5.2xlarge`, 1x A10G), matching
+OpenShift's own GPU-node rendering path, not a CPU-only guess.
+
+**Split build-time vs. boot-time, out of necessity:**
+- The NVIDIA **kernel module** must be built at *image-build* time
+  (`Containerfile`, via RPM Fusion's `akmod-nvidia`) — bootc images are
+  immutable at runtime (`/usr` read-only after boot), so akmod's normal
+  "rebuild automatically after a kernel update" model doesn't apply; the
+  module has to already match the image's baked kernel before first boot.
+  Kernel version is pinned from `/usr/lib/modules/*`'s directory name (the
+  base image's own kernel), not the build host's `uname -r` — the build VM
+  and the target bootc image run different kernels entirely.
+- The **CDI device spec** (`nvidia-ctk cdi generate`, referenced by
+  Quadlet's `AddDevice=nvidia.com/gpu=all`) needs *live GPU hardware* to
+  query — which the CPU-only build VM doesn't have. This runs instead as a
+  plain systemd unit (`nvidia-cdi-generate.service` — **not** Quadlet,
+  since Quadlet only generates units for a Podman container, and this is a
+  bare host command) at every boot on the real GPU instance.
+
+This is meaningfully higher-risk than everything else in this deployment
+— kernel-version matching, whether RPM Fusion's standard driver works
+correctly on G5's A10G passthrough vs. needing AWS's own GRID drivers, CDI/
+Podman version interactions. Expect iteration on real hardware, the same
+way the AMI-build issues were worked through earlier.
+
+**First real-hardware finding: the module builds but never loads.**
+Confirmed on the actual `g5.2xlarge`: `lspci` showed the A10G detected,
+`modinfo`/`find` confirmed the built kernel module files matched the
+running kernel exactly — but `lsmod` showed nothing loaded, and
+`/etc/modules-load.d/` was completely empty. RPM Fusion's `akmod-nvidia`
+builds the module and relies on the same on-demand udev/`nvidia-modprobe`
+trigger a desktop's Xorg/Wayland session would normally fire on first
+touch of `/dev/nvidia0` — a headless server never does that, so nothing
+ever loads it. Fixed by explicitly listing the modules
+(`nvidia nvidia_uvm nvidia_modeset nvidia_drm`) in
+`/etc/modules-load.d/nvidia.conf`, baked at build time — the standard
+fix for headless/compute NVIDIA servers. `nvidia-cdi-generate.service`
+now also explicitly orders `After=systemd-modules-load.service`.
+
+Also added while debugging this on real hardware: a `NOPASSWD` sudoers
+rule for `admin` (`/etc/sudoers.d/90-admin-nopasswd`) — the baked-in user
+has a key but no password, so `sudo` always failed asking for one that
+doesn't exist, which blocked live diagnosis (`sudo modprobe`, `sudo podman
+exec`, etc.) without a full rebuild each time. Acceptable tradeoff for a
+single-purpose demo VM, not a shared multi-tenant host.
 
 ## Architecture: why this all runs on x86_64, not the Mac
 
@@ -52,24 +140,35 @@ on the build VM or otherwise** — `bootc-image-builder` is just a privileged
 ## How it works
 
 ```
-bootc host (Fedora-bootc, x86_64)
+bootc host (Fedora-bootc, x86_64, NVIDIA driver baked in)
   systemd PID 1
   │
-  ├─ rmf-zenoh-router.service   (Quadlet-bound container, starts first)
-  ├─ rmf-simulation.service     (Gazebo + fleet adapters + Xvfb/x11vnc)
-  ├─ rmf-fleet-monitor.service  (subscribes to /fleet_states)
-  ├─ rmf-novnc.service          (websockify web viewer, port 8080)
-  └─ rmf-task-dispatch.service  (submits the patrol once, then idles)
+  ├─ nvidia-cdi-generate.service     (plain systemd unit, not Quadlet — runs first)
+  ├─ rmf-zenoh-router.service        (Quadlet-bound container, starts first among the RMF units)
+  ├─ rmf-simulation.service          (Gazebo world + fleet adapter + fleet manager + Xvfb/x11vnc, GPU)
+  ├─ rmf-fleet-coordinator.service   (centralized task assignment)
+  ├─ rmf-robot-tinyRobot1.service    (Nav2 + SLAM for tinyRobot1)
+  ├─ rmf-robot-tinyRobot2.service    (Nav2 + SLAM for tinyRobot2)
+  ├─ rmf-robot-tinyRobot3.service    (Nav2 + SLAM for tinyRobot3)
+  ├─ rmf-robot-tinyRobot4.service    (Nav2 + SLAM for tinyRobot4)
+  ├─ rmf-fleet-monitor.service       (subscribes to /fleet_states)
+  ├─ rmf-novnc.service               (websockify web viewer, port 8080)
+  └─ rmf-task-dispatch.service       (submits the patrol once, then idles)
 ```
 
-All five are ordinary systemd services generated from the `.container`
-files in `containers/` by Quadlet — inspect/restart them with normal
-`systemctl`/`journalctl` once the VM is up.
+All except `nvidia-cdi-generate.service` are ordinary systemd services
+generated from the `.container` files in `containers/` by Quadlet —
+inspect/restart them with normal `systemctl`/`journalctl` once the VM is
+up. Each robot maps to what would be its own separate Pod on OpenShift
+(`office/helm/templates/robot-deployments.yaml`) — same split, just
+Quadlet units instead of Kubernetes Pods, all sharing the host's real
+network via `Network=host` instead of per-Pod Services.
 
-The host image itself (`Containerfile`) carries **no ROS, no GL, no
-RoboStack** — it only registers the five Quadlet units and their bound
-images under `/usr/lib/bootc/bound-images.d/`, exactly like
-`images/ros-containers/Containerfile` does for its own ROS container.
+The host image (`Containerfile`) carries **no RoboStack, no source
+builds** — the RMF/ROS workload is entirely in the bound app image,
+unchanged. It does now carry the NVIDIA driver + `nvidia-container-toolkit`
+(see "GPU is required, not optional" above) — the one exception to "host
+stays minimal," because `gpu_lidar` genuinely needs it.
 
 **No Quadlet `.pod` file needed.** Every zenoh config/launch script in this
 repo explicitly disables multicast scouting
@@ -108,7 +207,8 @@ needed there.
 ```
 
 Pushes `quay.io/rhkp/openrmf-office-bootc-host:latest` (override via
-`HOST_IMAGE=...`).
+`HOST_IMAGE=...`). Now includes compiling the NVIDIA kernel module —
+expect a noticeably longer build than before.
 
 ### 2. Build and register the AMI
 
@@ -167,6 +267,40 @@ script, documented here so they aren't rediscovered):
   6.76 GB) — confirmed by a real `no space left on device` failure mid-install.
   `config.toml` now sets `[[customizations.filesystem]] mountpoint = "/"
   minsize = "30 GiB"`.
+- **AMI names must be unique per account/region — rebuilding under the same
+  name fails at the very last step**, after the full disk build + S3 upload
+  + snapshot import already completed (hit this twice). `build-ami.sh` now
+  deregisters any prior AMI/snapshot under `AWS_AMI_NAME` up front instead
+  of wasting a full ~25-30 min cycle to find out at the end.
+- **Overlay scripts (`scripts-overlay/`) need their executable bit set
+  explicitly, not inherited from the source.** `cp`-ing from
+  `office/helm/files/` preserved those files' actual git permissions
+  (`rw-r--r--`, not executable) — Helm's ConfigMap mount papers over this
+  with its own `defaultMode: 0755`, but a plain Podman bind mount
+  (`Volume=...:ro`) uses the host file's real mode directly. Confirmed by a
+  real failure: both `rmf-simulation` and every robot unit exited
+  `status=126` / `Permission denied` running their (correctly-pathed, but
+  non-executable) overlay script. Fixed both at the source
+  (`chmod +x scripts-overlay/*.sh`) and defensively in the `Containerfile`
+  (`RUN chmod +x /opt/rmf-overlay/*.sh`) so this can't regress silently.
+- **NVIDIA driver builds fine but never loads on a headless server.**
+  Confirmed on real `g5.2xlarge` hardware: PCI device detected, kernel
+  module files built and matching the running kernel, but `lsmod` showed
+  nothing loaded — a desktop's Xorg/Wayland session is normally what
+  triggers the on-demand udev/`nvidia-modprobe` load, and headless servers
+  never do that. Fixed via `/etc/modules-load.d/nvidia.conf`
+  (`nvidia nvidia_uvm nvidia_modeset nvidia_drm`).
+- **`dnf install kernel-devel` (unpinned) can silently upgrade — and
+  remove — the running kernel** as a side effect of dependency resolution
+  (confirmed in a build log: `Removing kernel-core-0:7.1.10...`, installing
+  `7.1.12` instead). A kernel-version variable captured *before* this
+  install is stale immediately after. Pinning the exact pre-install NVR
+  (`kernel-devel-<version>`) isn't robust either — that exact build can be
+  pruned from Fedora's mirrors by the time of a later rebuild (confirmed:
+  worked once, then `No match for argument` a few hours later). The robust
+  approach: let the upgrade happen, then read the kernel version from
+  `/usr/lib/modules/*` *after* installing — that's the only point it's
+  ground truth.
 
 ### 3. Launch the VM (a real EC2 instance)
 
@@ -177,9 +311,9 @@ script, documented here so they aren't rediscovered):
 Reuses the shared subnet/security group (`sg-...` only opens port 22) and
 additionally creates one small, dedicated security group opening 8080 for
 noVNC — additive, doesn't modify the shared one. No `KEY_NAME` needed (see
-above); `INSTANCE_TYPE` defaults to `t3.medium`, bumped up from
-`bootc-demos`' generic `t3.small` default since Gazebo/Nav2/RViz need more
-headroom.
+above); `INSTANCE_TYPE` defaults to `g5.2xlarge` (1x A10G GPU) — required
+for `gpu_lidar`, not just extra headroom (see "GPU is required, not
+optional" above).
 
 Prints the instance's public IP, SSH command, and demo URL.
 
@@ -203,30 +337,44 @@ noVNC's own client JS auto-selects `wss://` when the page itself loads over
 `https://`, so no separate app-level config is needed beyond serving the
 page itself over TLS.
 
-Gazebo/RViz render via Mesa software rendering (llvmpipe) — same rendering
-path already proven in the noVNC deployment on OpenShift, just without GPU
-passthrough (not needed for a demo VM).
+Gazebo's GUI/RViz still render via Mesa software rendering (llvmpipe) on
+the VNC display — only `gpu_lidar`'s own sensor rendering needs the real
+GPU (via EGL, `DISPLAY` unset in the headless server process).
 
 ## Status
 
-- [x] Quadlet units written for all 5 services, reusing existing launch
-      scripts/images unchanged
-- [x] Host `Containerfile` written (Fedora-bootc + bound-image registration only)
-- [x] Build/AMI/launch scripts written
-- [x] Host image built + pushed
-- [x] AMI built and registered
-- [x] EC2 instance launched, all 5 systemd services `active (running)`,
-      noVNC externally reachable (`HTTP 200` confirmed) — validated at
-      parity with the OpenShift office demo
-- [x] HTTPS added for noVNC (self-signed cert baked into the host image,
-      confirmed via `curl -k` — TLS 1.3, `CN=rhkp-rmf-office-bootc-vm`)
-- [x] Rebuilt + relaunched with HTTPS + `rhkp-` naming
-      (AMI `ami-0b218d07bfe70899c`, instance `i-03eb13fddd4a3c4ea`); old
-      unprefixed instance/AMI/snapshot/security-group cleaned up
+- [x] Quadlet units + host image working end-to-end for the **stock**
+      office world (single-container mode): AMI `ami-0b218d07bfe70899c`,
+      instance `i-03eb13fddd4a3c4ea`, HTTPS confirmed
+- [x] Switched to the real custom demo: `collision_test.world` +
+      robot-as-pod architecture (10 units: zenoh-router, simulation,
+      fleet-coordinator, 4x robot, fleet-monitor, novnc, task-dispatch)
+- [x] Script-drift found and fixed via `scripts-overlay/` +
+      Quadlet `Volume=` mounts (`launch-robot.sh`,
+      `launch-simulation-world-only-viz.sh`, `wait-for-world.sh`)
+- [x] NVIDIA driver + CDI support added (`Containerfile` akmod build +
+      `nvidia-cdi-generate.service` + `AddDevice=nvidia.com/gpu=all` on
+      `rmf-simulation`); `INSTANCE_TYPE` → `g5.2xlarge`
+- [x] First `g5.2xlarge` boot: driver built but never loaded (headless,
+      no udev trigger) — fixed via `/etc/modules-load.d/nvidia.conf`;
+      also added `NOPASSWD` sudo for `admin` for faster live debugging
+- [x] Found + fixed a second real bug on the next rebuild: overlay scripts
+      (`scripts-overlay/*.sh`) weren't executable (`cp` preserved
+      non-executable git permissions) — both `rmf-simulation` and every
+      robot unit were exiting `status=126`/`Permission denied`. Fixed at
+      the source and defensively in the `Containerfile`.
+      Also hardened `build-ami.sh` to auto-deregister a prior AMI under
+      the same name (hit the `InvalidAMIName.Duplicate` failure twice).
+- [x] **All 11 units `active` on real `g5.2xlarge` hardware**
+      (AMI `ami-02ae3f13f03518c12`, instance `i-0a952a1baee120969`).
+      `nvidia-cdi-generate` succeeded, `lsmod` confirms the driver loaded.
+      `nvidia-smi` binary itself still missing (cosmetic — NVML/the actual
+      driver path CDI depends on works regardless; not blocking).
+- [x] **`gpu_lidar` confirmed producing real scan data** —
+      `ros2 topic echo /tinyRobot1/scan --once` returned real, varying
+      range values (~0.8m–6m+), not empty/all-zero/all-`inf`. This was the
+      core risk flagged at the start of the GPU work; now resolved.
 - [ ] `rmf-web` dashboard (deferred — future phase, not in scope here)
-- [ ] Optional: `NOPASSWD` sudoers rule for the baked-in `admin` user (not
-      needed so far — `systemctl status`/`journalctl` reads work without
-      root; only needed if interactive admin access is required later)
 
 ## Troubleshooting
 
@@ -241,3 +389,26 @@ passthrough (not needed for a demo VM).
   `127.0.0.1:5900`, which only resolves to the simulation container's port
   if they share the host network namespace (true here, same as within a
   single OpenShift Pod).
+- `nvidia-smi` on the host confirms the driver loaded; `systemctl status
+  nvidia-cdi-generate` and `cat /var/run/cdi/nvidia.yaml` confirm the CDI
+  spec exists before `rmf-simulation` starts (it `Requires=`/`After=` this
+  unit, so it shouldn't start without it — if it does, the dependency
+  didn't take, check the unit file was actually copied/enabled at build
+  time via `systemctl is-enabled nvidia-cdi-generate`).
+- If `rmf-simulation` starts but `AddDevice=nvidia.com/gpu=all` silently
+  has no effect (no GPU visible inside the container): check
+  `/var/run/cdi/nvidia.yaml` isn't empty/stale — it's regenerated fresh
+  every boot specifically to avoid this, so an empty file usually means
+  `nvidia-ctk` itself failed (check `journalctl -u nvidia-cdi-generate` —
+  most likely cause is the driver/module not actually loaded, i.e.
+  `nvidia-smi` failing).
+- The concrete test that GPU rendering is actually feeding lidar, not just
+  that nothing crashed: `ros2 topic echo /tinyRobot1/scan --once` from
+  inside `rmf-simulation` or a robot container should show real,
+  non-empty/non-all-`inf` range data.
+- If `launch-robot.sh`/`launch-simulation-world-only-viz.sh` behave
+  differently than expected: confirm the overlay actually took effect —
+  `podman inspect rmf-robot-tinyRobot1 --format '{{.Mounts}}'` should show
+  the `/opt/rmf-overlay/...` bind mount; if a robot spawns its own fleet
+  adapter (duplicate, conflicting with the one in `rmf-simulation`), the
+  stale image-baked script is running instead of the overlay.

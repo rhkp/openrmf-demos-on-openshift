@@ -24,11 +24,45 @@ COPY containers/rmf-simulation.container /usr/share/containers/systemd/rmf-simul
 COPY containers/rmf-fleet-monitor.container /usr/share/containers/systemd/rmf-fleet-monitor.container
 COPY containers/rmf-novnc.container /usr/share/containers/systemd/rmf-novnc.container
 COPY containers/rmf-task-dispatch.container /usr/share/containers/systemd/rmf-task-dispatch.container
+COPY containers/rmf-fleet-coordinator.container /usr/share/containers/systemd/rmf-fleet-coordinator.container
+COPY containers/rmf-robot-tinyRobot1.container /usr/share/containers/systemd/rmf-robot-tinyRobot1.container
+COPY containers/rmf-robot-tinyRobot2.container /usr/share/containers/systemd/rmf-robot-tinyRobot2.container
+COPY containers/rmf-robot-tinyRobot3.container /usr/share/containers/systemd/rmf-robot-tinyRobot3.container
+COPY containers/rmf-robot-tinyRobot4.container /usr/share/containers/systemd/rmf-robot-tinyRobot4.container
 
 RUN install -d /usr/lib/bootc/bound-images.d && \
-    for unit in rmf-zenoh-router rmf-simulation rmf-fleet-monitor rmf-novnc rmf-task-dispatch; do \
+    for unit in rmf-zenoh-router rmf-simulation rmf-fleet-monitor rmf-novnc rmf-task-dispatch \
+                rmf-fleet-coordinator rmf-robot-tinyRobot1 rmf-robot-tinyRobot2 rmf-robot-tinyRobot3 rmf-robot-tinyRobot4; do \
       ln -sf "/usr/share/containers/systemd/${unit}.container" "/usr/lib/bootc/bound-images.d/${unit}.container"; \
     done
+
+# Script overlay: office/helm/files/ (Helm ConfigMap-mounted on OpenShift,
+# always wins over what's baked into the app image) has diverged from
+# common/scripts/ in the app image itself. Confirmed by diffing directly:
+# launch-robot.sh in the image spawns its own per-robot fleet adapter
+# (stale — fleet adaptation is now centralized in the simulation
+# container); launch-simulation-world-only-viz.sh isn't in the image at
+# all; wait-for-world.sh additionally waits for /tf+/tf_static in the real
+# version. Bake the real (Helm) versions in here and Volume-mount them over
+# the stale/missing paths in the Quadlet units — the same override Helm
+# achieves via ConfigMap, just via bootc host + Quadlet instead.
+COPY scripts-overlay/ /opt/rmf-overlay/
+# Defensive, not just fixed at the source: confirmed by a real failure
+# ("Permission denied" launching both launch-simulation-world-only-viz.sh
+# and launch-robot.sh) that `cp` from office/helm/files/ preserved those
+# files' non-executable git permissions — Helm's ConfigMap mount papers
+# over this with its own `defaultMode: 0755`, but a plain bind mount
+# (Volume=...:ro) uses the host file's actual mode directly.
+RUN chmod +x /opt/rmf-overlay/*.sh
+
+# The `admin` user (config.toml) has a key but no password — sudo would
+# always fail asking for a password that doesn't exist. Needed for live
+# debugging on real hardware (e.g. `sudo podman exec`, `sudo modprobe`)
+# without a full rebuild cycle each time — a demo VM, not a shared
+# multi-tenant host, so unrestricted NOPASSWD sudo for this one user is an
+# acceptable tradeoff here.
+RUN echo 'admin ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/90-admin-nopasswd && \
+    chmod 0440 /etc/sudoers.d/90-admin-nopasswd
 
 # Self-signed TLS cert for noVNC (websockify --cert). There's no fixed
 # domain/Elastic IP for this demo VM (the public IP changes per launch), so
@@ -54,3 +88,67 @@ RUN mkdir -p /etc/rmf-novnc-tls && \
 # ever changes to one that does ship firewalld, add
 # `firewall-offline-cmd --add-port=7447/tcp --add-port=5900/tcp --add-port=8080/tcp`
 # back in.
+
+# ============================== NVIDIA GPU support ==============================
+# gpu_lidar (Gazebo's GPU-rendered lidar sensor, which Nav2/SLAM and
+# collision avoidance depend on) silently produces no data on software
+# rendering — confirmed by this project's own prior debugging (see
+# bootc-vm/README.md). A real GPU is required, not optional, for the
+# 4-robot collision_test.world demo. Higher risk than everything else in
+# this Containerfile — expect iteration on real GPU hardware.
+#
+# bootc images are immutable at runtime (/usr is read-only after boot), so
+# the NVIDIA kernel module MUST be built at image-build time against this
+# image's own kernel — akmod/dkms's normal "rebuild automatically on next
+# boot after a kernel update" model doesn't apply here.
+RUN dnf -y install \
+      https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+      https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+
+# nvidia-container-toolkit is NOT part of RPM Fusion (that's driver
+# packages only) — it's a separate NVIDIA-hosted repo. Confirmed directly
+# by fetching this URL: without it, `dnf install nvidia-container-toolkit`
+# below would fail with "no package available".
+RUN curl -sL https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo \
+      -o /etc/yum.repos.d/nvidia-container-toolkit.repo
+
+# kernel-devel must match whatever kernel actually ends up in the image —
+# NOT necessarily the base image's original kernel. Confirmed by a real
+# failure: pinning the base image's pre-install kernel version and
+# verifying against it afterward caught `dnf install kernel-devel`
+# silently upgrading (and removing) the base kernel entirely — dnf
+# resolves kernel-devel to the latest available build, which drags
+# kernel/kernel-core/kernel-modules along as a matched set, replacing the
+# older ones (confirmed in the build log: "Removing kernel-core-0:7.1.10",
+# installing 7.1.12, running its own depmod/initramfs regen).
+#
+# So: let the upgrade happen, then read the kernel version from
+# /usr/lib/modules/* AFTER installing, not before — that's the only
+# point where it's ground truth. Earlier attempts also tried pinning the
+# exact pre-install NVR string directly (`kernel-devel-<kver>`), which
+# broke differently: that exact build had already been pruned from
+# Fedora's mirrors by the time of a later rebuild (repos only keep a
+# narrow window of versions). Neither "pin before" approach is robust
+# against a moving upstream repo; only reading the result after the fact is.
+RUN dnf -y install kernel-devel akmod-nvidia nvidia-container-toolkit && \
+    dnf clean all && \
+    kver="$(cd /usr/lib/modules && echo *)" && \
+    echo "Building NVIDIA module for kernel: ${kver}" && \
+    akmods --kernels "${kver}" --force
+
+# Building the module isn't enough — confirmed by a real failure on actual
+# GPU hardware: PCI device detected (lspci showed the A10G), module files
+# present and matching the kernel (modinfo/find both confirmed), but
+# `lsmod` showed nothing loaded and /etc/modules-load.d/ was empty. On a
+# normal desktop, Xorg/Wayland starting is what triggers the on-demand
+# udev module load (via nvidia-modprobe) — a headless server never does
+# that, so the module has to be loaded explicitly instead.
+RUN printf '%s\n' nvidia nvidia_uvm nvidia_modeset nvidia_drm \
+      > /etc/modules-load.d/nvidia.conf
+
+# Host-level CDI-generation unit (not Quadlet — see the unit file's own
+# comment for why). Enabling at build time works offline, same mechanism
+# dnf package scriptlets already rely on for every other systemd-enabled
+# package in this image.
+COPY containers/nvidia-cdi-generate.service /usr/lib/systemd/system/nvidia-cdi-generate.service
+RUN systemctl enable nvidia-cdi-generate.service
