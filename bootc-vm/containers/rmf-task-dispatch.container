@@ -1,0 +1,25 @@
+# Note: office/scripts/dispatch-task.sh submits the patrol task once, then
+# runs `exec tail -f /dev/null` forever (that behavior comes from the
+# OpenShift Deployment world, where a container must keep running to avoid
+# CrashLoopBackOff — reused here unchanged rather than forking the script).
+# So this unit is a normal long-running service, not a systemd oneshot.
+[Unit]
+Description=OpenRMF office demo one-time patrol dispatch
+After=rmf-simulation.service rmf-zenoh-router.service
+Requires=rmf-simulation.service rmf-zenoh-router.service
+
+[Container]
+Image=quay.io/rhkp/openrmf-openshift-office-demo:nav2-sensors
+ContainerName=rmf-task-dispatch
+Network=host
+Pull=never
+GlobalArgs=--storage-opt=additionalimagestore=/usr/lib/bootc/storage
+Exec=/opt/rmf/demos/office/scripts/dispatch-task.sh
+Environment=READY_WAIT_SECONDS=30
+Environment=ZENOH_ROUTER_ENDPOINT=tcp/localhost:7447
+
+[Service]
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

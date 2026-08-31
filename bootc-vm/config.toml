@@ -1,0 +1,19 @@
+# bootc-image-builder customization — creates a login user on the built
+# image (fedora-bootc ships no default user/password). Replace the sshkey
+# with your own public key before building; AWS's own key-pair injection via
+# cloud-init would also work if you'd rather rely on that instead.
+[[customizations.user]]
+name = "admin"
+groups = ["wheel"]
+key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIpJMLGPT3bZWyrjXFvkVhRLlmrv0tWgYmOut1L1bBIM bootc-demo"
+
+# bib's default root partition size isn't nearly enough for the bound
+# workload images installed alongside the host OS — confirmed by a real
+# build failure ("no space left on device") unpacking nav2-sensors (6.76 GB
+# alone). Host image (~2 GB) + nav2-sensors (6.76 GB) + zenoh-router
+# (970 MB) + novnc (180 MB) is already ~10 GB before any runtime headroom
+# (ROS logs, /dev/shm-backed tmpfs, etc.) — size generously rather than
+# tune this exactly, EC2 gp3 storage is cheap.
+[[customizations.filesystem]]
+mountpoint = "/"
+minsize = "30 GiB"

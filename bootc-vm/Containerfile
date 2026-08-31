@@ -1,0 +1,56 @@
+# bootc HOST image for the OpenRMF office demo — a real bootable OS (own
+# kernel, systemd PID 1), not an OpenShift Pod base. See README.md for why
+# this is a genuinely different deployment target from office/, bootc/, and
+# hummingbird/.
+#
+# The host itself stays minimal: no ROS, no RoboStack, no dnf ROS packages
+# at all. The actual RMF workload runs as separate containers bound in via
+# Quadlet (systemd generator, part of Podman) — the exact pattern used in
+# ~/projects/bootc-images/images/ros-containers. That means the bound images
+# can stay the already-proven, already-deployed Ubuntu/apt images
+# (quay.io/rhkp/openrmf-openshift-office-demo:*, built from common/Dockerfile
+# and already running on OpenShift) completely unchanged.
+#
+# Build (x86_64 only — see README.md "Architecture" section):
+#   podman build -f bootc-vm/Containerfile -t <tag> bootc-vm/
+
+FROM quay.io/fedora/fedora-bootc:43
+
+# Copy the Quadlet unit files and register each as a bootc bound image, so
+# `bootc install`/`bootc upgrade` pulls and pins these workload images
+# alongside the host OS image, exactly like images/ros-containers does.
+COPY containers/rmf-zenoh-router.container /usr/share/containers/systemd/rmf-zenoh-router.container
+COPY containers/rmf-simulation.container /usr/share/containers/systemd/rmf-simulation.container
+COPY containers/rmf-fleet-monitor.container /usr/share/containers/systemd/rmf-fleet-monitor.container
+COPY containers/rmf-novnc.container /usr/share/containers/systemd/rmf-novnc.container
+COPY containers/rmf-task-dispatch.container /usr/share/containers/systemd/rmf-task-dispatch.container
+
+RUN install -d /usr/lib/bootc/bound-images.d && \
+    for unit in rmf-zenoh-router rmf-simulation rmf-fleet-monitor rmf-novnc rmf-task-dispatch; do \
+      ln -sf "/usr/share/containers/systemd/${unit}.container" "/usr/lib/bootc/bound-images.d/${unit}.container"; \
+    done
+
+# Self-signed TLS cert for noVNC (websockify --cert). There's no fixed
+# domain/Elastic IP for this demo VM (the public IP changes per launch), so
+# a real Let's Encrypt-style cert isn't practical — browsers will show a
+# "not trusted" warning that has to be clicked through, which is acceptable
+# for a demo. CN is a placeholder; browsers warn on self-signed certs
+# regardless of whether the CN matches the actual hostname/IP, so an exact
+# match isn't worth the complexity of generating this at first-boot instead.
+RUN mkdir -p /etc/rmf-novnc-tls && \
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+      -keyout /etc/rmf-novnc-tls/key.pem \
+      -out /etc/rmf-novnc-tls/cert.pem \
+      -subj "/CN=rhkp-rmf-office-bootc-vm" && \
+    cat /etc/rmf-novnc-tls/cert.pem /etc/rmf-novnc-tls/key.pem > /etc/rmf-novnc-tls/combined.pem && \
+    chmod 644 /etc/rmf-novnc-tls/combined.pem
+
+# NOTE: firewalld is NOT installed on quay.io/fedora/fedora-bootc:43
+# (confirmed via `rpm -q firewalld` against the base image directly — an
+# earlier assumption that it ships enabled by default was wrong for this
+# specific minimal image). So there's no host firewall to open ports on.
+# The EC2 security group (see scripts/register-and-launch.sh) is the only
+# access control layer for 22/8080 here — fine for a demo VM. If this base
+# ever changes to one that does ship firewalld, add
+# `firewall-offline-cmd --add-port=7447/tcp --add-port=5900/tcp --add-port=8080/tcp`
+# back in.

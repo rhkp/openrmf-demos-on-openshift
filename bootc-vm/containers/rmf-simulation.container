@@ -1,0 +1,25 @@
+[Unit]
+Description=OpenRMF office demo simulation (Gazebo + fleet adapters)
+After=rmf-zenoh-router.service
+Requires=rmf-zenoh-router.service
+
+[Container]
+Image=quay.io/rhkp/openrmf-openshift-office-demo:nav2-sensors
+ContainerName=rmf-simulation
+Network=host
+Pull=never
+GlobalArgs=--storage-opt=additionalimagestore=/usr/lib/bootc/storage
+ShmSize=2g
+Exec=/opt/rmf/scripts/launch-simulation-viz.sh
+Environment=RMF_LAUNCH_FILE=office.launch.xml
+Environment=ZENOH_ROUTER_ENDPOINT=tcp/localhost:7447
+Environment=RMF_VNC_PORT=5900
+Environment=RMF_VNC_WIDTH=1920
+Environment=RMF_VNC_HEIGHT=1080
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
