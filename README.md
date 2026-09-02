@@ -95,6 +95,14 @@ cp airport/helm/values.yaml.example airport/helm/values.yaml
 ./airport/deploy-openshift.sh
 ```
 
+## Which Dockerfile builds which image?
+
+See [common/IMAGES.md](common/IMAGES.md) — a Dockerfile's location doesn't
+tell you what image it produces or who consumes it (e.g. `common/novnc/`
+and `common/zenoh-router/` both feed images used by every demo *and* by
+`bootc-vm/`). That file is the single source of truth; don't infer it from
+folder names.
+
 ## Prerequisites
 
 - OpenShift 4.x cluster
