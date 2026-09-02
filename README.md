@@ -95,6 +95,14 @@ cp airport/helm/values.yaml.example airport/helm/values.yaml
 ./airport/deploy-openshift.sh
 ```
 
+## Which Dockerfile builds which image?
+
+See [common/IMAGES.md](common/IMAGES.md) — a Dockerfile's location doesn't
+tell you what image it produces or who consumes it (e.g. `common/novnc/`
+and `common/zenoh-router/` both feed images used by every demo *and* by
+`bootc-vm/`). That file is the single source of truth; don't infer it from
+folder names.
+
 ## Prerequisites
 
 - OpenShift 4.x cluster
@@ -110,9 +118,11 @@ cp airport/helm/values.yaml.example airport/helm/values.yaml
 | `hotel/helm/values.yaml` | Same pattern |
 | `airport/helm/values.yaml` | Same pattern |
 | `common/image.env` | Optional fallback for builds without Helm values |
+| `bootc-vm/config.toml` | SSH public key + disk sizing for the bootc host image build |
 | `.env`, `.env.local` | General secrets |
 
-Committed templates: `values.yaml.example` in each demo's `helm/` folder.
+Committed templates: `values.yaml.example` in each demo's `helm/` folder,
+`bootc-vm/config.toml.example`.
 
 ## How it works
 

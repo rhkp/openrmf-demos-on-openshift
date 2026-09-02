@@ -1,0 +1,19 @@
+[Unit]
+Description=OpenRMF fleet-state monitor
+After=rmf-simulation.service
+Requires=rmf-simulation.service
+
+[Container]
+Image=quay.io/rhkp/openrmf-openshift-office-demo:nav2-sensors
+ContainerName=rmf-fleet-monitor
+Network=host
+Pull=never
+GlobalArgs=--storage-opt=additionalimagestore=/usr/lib/bootc/storage
+Exec=/opt/rmf/scripts/run-fleet-monitor.sh
+Environment=ZENOH_ROUTER_ENDPOINT=tcp/localhost:7447
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

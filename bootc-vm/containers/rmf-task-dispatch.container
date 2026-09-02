@@ -1,0 +1,39 @@
+# dispatch-rmf-patrol-wrapper.sh is already correct in the image
+# (common/scripts/, confirmed identical to what's actually used) — no
+# overlay needed, unlike launch-robot.sh/launch-simulation-world-only-viz.sh.
+[Unit]
+Description=OpenRMF office demo one-time patrol dispatch (robot-as-pod mode)
+After=rmf-simulation.service rmf-zenoh-router.service
+Requires=rmf-simulation.service rmf-zenoh-router.service
+
+[Container]
+Image=quay.io/rhkp/openrmf-openshift-office-demo:nav2-sensors
+ContainerName=rmf-task-dispatch
+Network=host
+Pull=never
+GlobalArgs=--storage-opt=additionalimagestore=/usr/lib/bootc/storage
+Exec=/opt/rmf/scripts/dispatch-rmf-patrol-wrapper.sh
+Environment=ZENOH_ROUTER_ENDPOINT=tcp/localhost:7447
+Environment=FLEET_NAME=tinyRobot
+Environment=ROBOT_0=tinyRobot1
+Environment=ROBOT_1=tinyRobot2
+Environment=ROBOT_2=tinyRobot3
+Environment=ROBOT_3=tinyRobot4
+Environment=ROBOT_0_DEST=wp_east
+Environment=ROBOT_1_DEST=wp_west
+Environment=ROBOT_2_DEST=wp_north
+Environment=ROBOT_3_DEST=wp_south
+# Not production's 999999 (which effectively disables auto-dispatch,
+# relying on a human running dispatch-task-robot-mode.sh manually) — this
+# VM should be fully autonomous. Not a short guess either: sized from the
+# launch scripts' own worst-case internal wait/retry budgets (simulation's
+# traffic-schedule retries + Nav2-discovery wait + fleet-adapter retries,
+# plus each robot's wait-for-world.sh + Nav2/SLAM startup + 45s
+# zenoh-restart wait).
+Environment=READY_WAIT_SECONDS=300
+
+[Service]
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

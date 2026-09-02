@@ -1,0 +1,19 @@
+[Unit]
+Description=OpenRMF noVNC web viewer
+After=rmf-simulation.service
+Requires=rmf-simulation.service
+
+[Container]
+Image=quay.io/rhkp/openrmf-openshift-office-demo:novnc
+ContainerName=rmf-novnc
+Network=host
+Pull=never
+GlobalArgs=--storage-opt=additionalimagestore=/usr/lib/bootc/storage
+Volume=/etc/rmf-novnc-tls:/certs:ro
+Exec=--cert=/certs/combined.pem --web /opt/novnc 8080 127.0.0.1:5900
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
