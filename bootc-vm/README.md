@@ -125,6 +125,187 @@ doesn't exist, which blocked live diagnosis (`sudo modprobe`, `sudo podman
 exec`, etc.) without a full rebuild each time. Acceptable tradeoff for a
 single-purpose demo VM, not a shared multi-tenant host.
 
+## Host base image: Hummingbird, not fedora-bootc
+
+The host now builds `FROM quay.io/hummingbird-community/bootc-os:latest`
+instead of `quay.io/fedora/fedora-bootc:43` — Project Hummingbird's
+hardened, mostly-rebuilt (`.hum1`) package base, matching the hardening
+rationale already established for the separate `hummingbird/` app-image
+effort in this repo. Hard replacement, not a build-arg choice — same
+pattern `hummingbird/` used for the app image (contrast with
+`~/projects/bootc-images/images/ros-containers`, which *does* parameterize
+base OS via a build arg — not the pattern here, since this is a migration,
+not offering a choice).
+
+This was verified hands-on against the real image (disposable `podman run`
+containers, zero AWS cost) before touching the Containerfile, given how
+much iteration the NVIDIA work already took. Confirmed directly: the
+kernel NVR is identical to fedora-bootc's (`7.1.10-100.fc43.x86_64`, no
+`.hum1` suffix — unlike podman/curl/sudo/firewalld, which are all
+Hummingbird-rebuilt), so the existing "capture kernel version after
+installing kernel-devel, not before" logic transfers unchanged. Also
+confirmed directly: the Quadlet generator is present and correctly wired
+(`podman-system-generator -> .../podman/quadlet`) — the architecture's
+foundation isn't just inferred from the podman version.
+
+Two genuinely new failure modes surfaced that the existing `hummingbird/`
+effort never hit (it uses RoboStack/conda, never RPM Fusion):
+
+- **RPM Fusion's own bundled repo files break under Hummingbird.**
+  `/etc/os-release`'s `VERSION_ID` is a date string (`20251124`), not a
+  Fedora release number — breaks any repo using `$releasever` in its
+  baseurl/metalink, including repo files installed via the
+  `rpmfusion-*-release` RPM itself (not something we write ourselves).
+  Confirmed via a real 404 on RPM Fusion's metalink endpoint requesting
+  `...-20251124...`. `hummingbird/Containerfile`'s own fix for this class
+  of problem (hardcoding "43" into one hand-written repo file) doesn't
+  cover repo files bundled inside RPMs we don't control. Fixed instead
+  with a global override — `RUN echo 43 > /etc/dnf/vars/releasever` —
+  before any repo is touched; fixes every repo at once (Hummingbird's own
+  repo doesn't use `$releasever`, so it's unaffected).
+- **Installing the RPM Fusion release RPMs via `dnf install <url>`
+  conflicts with the already-installed `hummingbird-release` package**
+  (both provide `system-release`; dnf's solver tries to swap in a
+  `fedora-release-*` variant and collides). Tried excluding the
+  conflicting package name — whack-a-mole, doesn't converge (excluding one
+  spin variant just surfaces the next: `fedora-release-budgie`,
+  `-sway-atomic`, etc.). Fixed by installing the release RPMs via `rpm -Uvh
+  --nodeps --nosignature` instead — bypasses dnf's full dependency/conflict
+  solver for these (release RPMs are dependency-light by design: just repo
+  files + GPG keys). Normal `dnf install` of actual packages afterward
+  still verifies against the keys correctly, since the RPM's payload
+  (including the GPG key files) installs regardless of `--nosignature`
+  (that flag only skips checking the release RPM's *own* signature).
+
+Two smaller, already-anticipated differences also confirmed directly:
+`openssl` isn't installed by default on Hummingbird (fedora-bootc has it)
+— resolves fine from Hummingbird's own catalog once requested explicitly,
+no fallback-repo dependency. `firewalld` **is** installed and enabled by
+default on Hummingbird (fedora-bootc has neither) — the
+`firewall-offline-cmd` step this README used to describe as dead code for
+fedora-bootc is now active and required.
+
+**A third, much deeper problem, found on real hardware: a genuine kernel
+panic.** `bootc-image-builder` also needed `ROOTFS=ext4` instead of `xfs`
+on this base — `xfsprogs` genuinely isn't installed anywhere in the
+Hummingbird image (confirmed via `rpm -q`; `e2fsprogs` is present), and
+osbuild's `mkfs.xfs` stage needs that tool present in the source image
+itself, not just its own buildroot (isolated cheaply via a local
+`--type qcow2` test before ever touching AWS). But fixing that only got
+further: the launched instance kernel-panicked on boot —
+`VFS: Unable to mount root fs on unknown-block(0,0)`. Root cause: the
+mandatory kernel upgrade (`dnf install kernel-devel` dragging
+`kernel`/`kernel-core` along, since no `kernel-devel` exists anywhere
+matching Hummingbird's original kernel — confirmed via a hard dnf
+resolution failure when trying to protect/exclude the original kernel
+packages from upgrading) leaves the **new** kernel with no initramfs at
+all. The kernel-core package's own post-install hook tries to generate one
+via the normal kernel-install chain, but that chain assumes a live booted
+system — confirmed in the build log: `grub2-probe: error: failed to get
+canonical path of 'overlay'`, `System has not been booted with systemd as
+init system` — and fails silently inside a `podman build` sandbox instead
+of deferring cleanly to bootc, unlike Fedora's own rpm-ostree-aware
+kernel-install hook (which exits 77 *on purpose* — confirmed working
+correctly on fedora-bootc, where this was never a problem). Fixed by
+generating the initramfs explicitly ourselves:
+`dracut --force --no-hostonly`, matching this image's own
+`/usr/lib/dracut/dracut.conf.d/20-bootc.conf` (`hostonly=no`) setting for
+portability to real hardware. Confirmed directly before spending another
+AMI cycle: without this, `initramfs.img` is simply absent for the new
+kernel; with it, a normal ~54MB image containing the `nvme` driver (and
+everything else needed to actually boot on EC2) is produced.
+
+**A fourth problem, the sneakiest one: the NVIDIA module was never actually
+built, and nothing said so.** After the boot panic was fixed, the instance
+came up fine but `nvidia-cdi-generate` failed — `modinfo nvidia` couldn't
+find the module at all, and `rpm -qa` showed no `kmod-nvidia-*` package
+had ever been produced. Traced back through the build logs (the actual
+`akmods` step had been cached across three rebuilds, so its real output
+was buried): `Building and installing nvidia-kmod [FAILED]` — with a real
+compile-time error, `error creating temporary file /var/tmp/rpm-tmp...:
+Permission denied`. Root cause: **`/var/tmp` genuinely doesn't exist on
+Hummingbird at all** (confirmed: `ls -ld /var/tmp` → "No such file or
+directory" — `/tmp` is fine, `/var/tmp` just isn't there), and
+`akmodsbuild` (which shells out to `rpmbuild`) needs it for staging. Worse:
+**`akmods --force` exits `0` even when the compile fails** — it logs
+"Building rpms failed" as a hint, not an error, so `podman build` never
+noticed and the image built and pushed "successfully" with a genuinely
+missing driver, three rebuild cycles running before this surfaced. Fixed
+two ways: `mkdir -p /var/tmp && chmod 1777 /var/tmp` before the
+kernel-devel/akmod-nvidia install (confirmed this alone fixes the build,
+verified locally — `nvidia.ko.xz` appears where it didn't before), and an
+explicit post-build check (`ls .../nvidia.ko.xz || exit 1`) so a build
+failure here can never again slip through silently — `akmods`'s own exit
+code cannot be trusted alone.
+
+## End-to-end reliability: three more bugs found chasing real task dispatch
+
+The GPU/driver work above got `gpu_lidar` producing real scan data, but a
+completely fresh, unmodified boot still didn't reliably reach "4 robots
+actually patrol the building" — three more real, previously-undiagnosed
+bugs surfaced closing that gap, none of them GPU-related.
+
+- **firewalld's default zone silently broke Gazebo's own transport, not
+  just our app ports.** Even with 7447/5900/8080 open, `gz topic -l`
+  inside `rmf-simulation` returned *nothing at all* — not even the
+  always-on `/clock`/`/stats` topics — meaning `gpu_lidar`'s scan topic
+  had zero subscribers reaching it. Root cause: Gazebo's own transport
+  (`gz-transport`) uses UDP multicast discovery (port 11319) plus
+  per-topic ephemeral TCP data channels that can't be allowlisted by a
+  fixed port range; firewalld's default zone was dropping both. Confirmed
+  directly: opening `11319/udp` alone wasn't sufficient; switching the
+  default zone to `trusted` fixed it immediately. Safe here specifically
+  because every `.container` unit uses `Network=host` — there's no
+  container-to-container boundary for the OS firewall to usefully enforce,
+  and the real security boundary is the AWS Security Group. Fixed via a
+  second `firewall-offline-cmd --set-default-zone=trusted` call (it's a
+  "stand-alone option" per its own usage rules — confirmed by a real
+  failure combining it with `--add-port` in one invocation).
+- **What looked like a cold-start "zenoh registration race" for the
+  traffic schedule node was actually a missing file.** The script's own
+  comments (and this README, previously) described `wait-for-service.sh`
+  timing out under cold-start CPU pressure as an already-known,
+  hard-to-avoid race. It wasn't a race at all: `wait-for-service.sh`
+  exists in `common/scripts/` in this repo, but the already-built,
+  already-tagged `quay.io/rhkp/openrmf-openshift-office-demo:nav2-sensors`
+  image predates that file being added — every retry attempt failed
+  near-instantly (exec of a nonexistent file), 100% reproducible across
+  three full container restarts, not intermittent at all. Fixed by
+  rebuilding and re-pushing the same app image tag. Confirmed: the
+  schedule node now registers in ~6 seconds on the first attempt,
+  consistently. (Also bumped the retry budget 3→6 attempts and made total
+  exhaustion fatal — `exit 1`, relying on `Restart=always` on
+  `rmf-simulation.service` for a clean restart — as defense-in-depth, even
+  though the real fix above made this mostly moot.)
+- **Plain `kill` (SIGTERM) doesn't reliably stop a failed retry attempt,
+  causing duplicate fleet adapters that crash each other.** Confirmed on
+  real hardware via `ps`: after the fleet-adapter retry loop declared an
+  attempt "failed" and moved on, the "failed" process was still alive
+  minutes later, running *alongside* the new attempt. Both processes then
+  raced to register the identical ROS node name
+  (`tinyRobot_fleet_adapter`); whichever finished second crashed with
+  `AssertionError: Unable to initialize fleet adapter. Please ensure RMF
+  Schedule Node is running` — even though the schedule node was directly
+  confirmed alive and actively processing at that exact moment. Root
+  cause: an rclpy-based process deep in native (rclcpp/zenoh)
+  initialization when SIGTERM arrives can go a long time without actually
+  dying, since Python's signal handling only runs between bytecode
+  instructions on the main thread and won't interrupt a blocking
+  C-extension call. Fixed with a shared `kill_and_confirm_dead()` helper
+  (SIGKILL, which can't be caught or deferred, then polls for the pid to
+  actually disappear) used by both the traffic-schedule and fleet-adapter
+  retry loops, applied identically to `bootc-vm/scripts-overlay/` and
+  `office/helm/files/` (kept byte-identical on purpose — this project has
+  been burned by these two diverging before). Also added the same
+  fatal-on-exhaustion pattern to the fleet-adapter loop for consistency.
+
+With all three fixed together, a real fresh boot reached full end-to-end
+success with zero manual intervention: all 4 robots discovered and
+registered, all 4 patrol tasks dispatched and accepted by RMF, and
+`tinyRobot1`'s odometry directly confirmed moving from its spawn point
+(`x=-4.0`) to `x=7.77` toward its assigned waypoint — real task execution,
+not just acceptance.
+
 ## Architecture: why this all runs on x86_64, not the Mac
 
 `docker.io/osrf/ros:jazzy-desktop` — the base `common/Dockerfile` (and so
@@ -140,7 +321,7 @@ on the build VM or otherwise** — `bootc-image-builder` is just a privileged
 ## How it works
 
 ```
-bootc host (Fedora-bootc, x86_64, NVIDIA driver baked in)
+bootc host (Hummingbird bootc-os, x86_64, NVIDIA driver baked in)
   systemd PID 1
   │
   ├─ nvidia-cdi-generate.service     (plain systemd unit, not Quadlet — runs first)
@@ -178,16 +359,17 @@ discovery anywhere for a `.pod`'s shared netns to help with. `Network=host`
 on each independent `.container` unit gives all five the same real
 loopback, which is a strict superset of what a `.pod` would provide.
 
-**Firewalld: checked, not applicable here.** `Network=host` means these
-containers bind the host's real interface directly, so Podman's usual
-automatic firewall punching (which only applies to bridge networking +
-`PublishPort=`) wouldn't help if a host firewall were active. Verified
-directly against the base image (`rpm -q firewalld` inside
-`quay.io/fedora/fedora-bootc:43`) that firewalld **isn't installed** on this
-base at all, so there's nothing to configure — the EC2 security group
-(`scripts/register-and-launch.sh`) is the only access-control layer for
-22/8080, which is fine for a demo VM. Re-check this if the base image ever
-changes.
+**Firewalld: genuinely relevant here, not a non-issue.** `Network=host`
+means these containers bind the host's real interface directly, so
+Podman's usual automatic firewall punching (which only applies to bridge
+networking + `PublishPort=`) doesn't help if a host firewall is active.
+This section originally said firewalld wasn't installed on
+`fedora-bootc:43` and was safe to ignore — no longer true now that the
+host is Hummingbird's `bootc-os`, which ships firewalld enabled by default
+(confirmed via `rpm -q firewalld` + `systemctl is-enabled firewalld`). See
+"Host base image: Hummingbird, not fedora-bootc" above — the
+`Containerfile` now actively runs `firewall-offline-cmd` to open
+7447/5900/8080. Re-check this again if the base image ever changes further.
 
 ## Naming convention
 
@@ -227,8 +409,9 @@ reinventing it).
 
 `config.toml` is gitignored (same pattern as this repo's `values.yaml`) —
 copy the template and set your own SSH public key (no EC2 key pair needed;
-fedora-bootc has no cloud-init, so key-pair injection wouldn't work anyway,
-same reasoning `bootc-demos` bakes its own demo user):
+neither fedora-bootc nor Hummingbird's bootc-os ship cloud-init — confirmed
+directly for both — so key-pair injection wouldn't work anyway, same
+reasoning `bootc-demos` bakes its own demo user):
 
 ```bash
 cp bootc-vm/config.toml.example bootc-vm/config.toml
@@ -245,10 +428,19 @@ This builds *and* uploads *and* registers the AMI in one step —
 
 Three gotchas hit and fixed while first running this (all now handled by the
 script, documented here so they aren't rediscovered):
-- **`fedora-bootc` has no default root filesystem type** (unlike
-  `centos-bootc`/`rhel-bootc`) — `bib` fails with `missing required info:
-  DefaultRootFs` without an explicit `--rootfs` flag (`ROOTFS=xfs` by
-  default, overridable).
+- **Neither `fedora-bootc` nor Hummingbird's `bootc-os` have a default root
+  filesystem type** — `bib` fails with `missing required info:
+  DefaultRootFs` without an explicit `--rootfs` flag. **`ext4`, not
+  `xfs`** — confirmed by a real failure migrating to Hummingbird:
+  `mkfs.xfs: No such file or directory` inside `bib`'s disk-assembly
+  sandbox. Isolated cheaply (a local `--type qcow2` test, no AWS/S3
+  involved, ~1 min to fail vs. a ~25-30 min full AMI cycle) to `xfsprogs`
+  genuinely not being installed anywhere in the Hummingbird image
+  (`e2fsprogs` is present) — osbuild's mkfs stage needs the filesystem
+  tool present in the *source* image itself, not just `bib`'s own
+  buildroot. `ext4` (`ROOTFS=ext4`, now the default) works cleanly
+  end-to-end on Hummingbird; this wasn't an issue on fedora-bootc since it
+  ships `xfsprogs` by default.
 - **`bib` no longer pulls images itself** — it needs `HOST_IMAGE` already
   present in *root's* podman storage before it runs (the script does this
   pull explicitly now). Root's podman is a separate auth/storage namespace
@@ -380,6 +572,37 @@ GPU (via EGL, `DISPLAY` unset in the headless server process).
       `ros2 topic echo /tinyRobot1/scan --once` returned real, varying
       range values (~0.8m–6m+), not empty/all-zero/all-`inf`. This was the
       core risk flagged at the start of the GPU work; now resolved.
+- [x] Verified the Hummingbird base (`quay.io/hummingbird-community/bootc-os`)
+      hands-on before migrating: kernel NVR match, Quadlet generator
+      presence, package availability all confirmed directly via disposable
+      `podman run` containers (zero AWS cost)
+- [x] Migrated `Containerfile` to Hummingbird; found + fixed two new
+      failure modes not seen on fedora-bootc: global `$releasever`
+      override (RPM Fusion's own repo files break under Hummingbird's
+      date-based `VERSION_ID`) and `rpm -Uvh --nodeps --nosignature` for
+      the RPM Fusion release RPMs (avoids a `system-release` conflict with
+      `hummingbird-release`); restored the `firewall-offline-cmd` step
+      (firewalld is enabled by default here, unlike fedora-bootc); added
+      an explicit `openssl` install
+- [x] Rebuilt + relaunched on Hummingbird; all 11 units, GPU/CDI, and real
+      lidar data confirmed working identically to the fedora-bootc build
+- [x] Found + fixed firewalld's default zone silently dropping Gazebo's own
+      transport (UDP multicast discovery + ephemeral TCP data channels) —
+      fixed via `--set-default-zone=trusted` (safe given `Network=host`
+      everywhere; AWS Security Group is the real boundary)
+- [x] Found + fixed `wait-for-service.sh` missing from the deployed app
+      image tag (misdiagnosed as a cold-start "race" until traced down) —
+      rebuilt + re-pushed `quay.io/rhkp/openrmf-openshift-office-demo:nav2-sensors`
+- [x] Found + fixed duplicate fleet-adapter processes racing on the same
+      ROS node name, caused by plain `kill` (SIGTERM) not reliably
+      terminating a failed retry attempt — fixed with SIGKILL +
+      confirm-dead polling in both `launch-simulation-world-only-viz.sh`
+      copies
+- [x] **Full end-to-end success on a cold, unmodified boot, zero manual
+      intervention**: AMI `ami-030d818128f283ac8`, instance
+      `i-0402307e8194e0fb2` — all 4 robots discovered, all 4 patrol tasks
+      dispatched and accepted, `tinyRobot1` odometry confirmed moving
+      toward its waypoint
 - [ ] `rmf-web` dashboard (deferred — future phase, not in scope here)
 
 ## Troubleshooting

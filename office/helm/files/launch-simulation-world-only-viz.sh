@@ -25,6 +25,32 @@ echo "[simulation-world] Starting x11vnc on port ${RMF_VNC_PORT}..."
 x11vnc -display "${DISPLAY_NUM}" -rfbport "${RMF_VNC_PORT}" -shared -forever -nopw &
 X11VNC_PID=$!
 
+# Plain `kill` (SIGTERM) on a failed retry attempt is not enough — confirmed
+# by a real failure: an rclpy-based process (traffic schedule or fleet
+# adapter) that's still deep in native (rclcpp/zenoh) initialization when
+# SIGTERM arrives can go a long time without actually dying, because
+# Python's signal handling only runs between bytecode instructions on the
+# main thread and won't interrupt a blocking C-extension call. The retry
+# loops below don't wait to confirm the old process is gone before
+# starting a new one, so the old attempt can still be alive when the new
+# one launches — both then race to register the exact same ROS node name
+# (e.g. `tinyRobot_fleet_adapter`), and whichever finishes second crashes
+# with `AssertionError: Unable to initialize fleet adapter` even though
+# the schedule node it complains about is actually up and healthy. Directly
+# observed on real hardware: `ps` showing two live fleet_adapter processes
+# at once, tens of seconds after the first one was supposedly killed.
+# SIGKILL can't be caught or deferred, so use it here, then actually poll
+# for the pid to disappear instead of assuming the signal was instant.
+kill_and_confirm_dead() {
+  local pid="$1" desc="$2"
+  kill -9 "${pid}" 2>/dev/null || true
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    kill -0 "${pid}" 2>/dev/null || return 0
+    sleep 1
+  done
+  echo "[simulation-world] WARNING: ${desc} (pid ${pid}) still alive 10s after SIGKILL" >&2
+}
+
 cleanup() {
   echo "[simulation-world] Cleaning up..."
   kill ${FLEET_PID:-} 2>/dev/null || true
@@ -113,20 +139,44 @@ GT_ODOM_PID=$!
 # graph, forever, with no automatic recovery. A process-liveness check can't
 # catch this; verify `/rmf_traffic/register_participant` actually shows up in
 # `ros2 service list`, and restart the node if it doesn't.
+#
+# 3 attempts x 30s wasn't a big enough budget — confirmed by a real failure
+# (twice in a row, on real GPU hardware) where all 3 attempts exhausted
+# under cold-start CPU pressure and the loop just fell through silently,
+# leaving NO traffic schedule node running for the rest of the container's
+# life. That's what actually caused the fleet adapter's crash downstream:
+# it initializes fine (registers as a node, passes the `kill -0` + `ros2
+# node list` check in its own retry loop below) but only discovers ~45s
+# later that there's no real schedule to talk to, and hard-crashes
+# (`AssertionError: Unable to initialize fleet adapter`) with nothing left
+# to restart it — a second, worse instance of the exact false-positive
+# problem described above, this time undetectable by *this* node's own
+# liveness check since the crash happens in a completely different
+# process. 6x45s (vs fleet adapter's own 8x20s) gives strictly more
+# cold-start headroom than what was observed to eventually succeed by
+# hand. If even that's exhausted, don't silently continue into a
+# guaranteed-broken fleet adapter — exit non-zero so systemd's
+# Restart=always on rmf-simulation.service gets a real do-over instead.
 echo "[simulation-world] Starting RMF traffic schedule node..."
-for attempt in 1 2 3; do
-  echo "[simulation-world] Traffic schedule attempt ${attempt}/3..."
+traffic_schedule_ok=0
+for attempt in 1 2 3 4 5 6; do
+  echo "[simulation-world] Traffic schedule attempt ${attempt}/6..."
   ros2 run rmf_traffic_ros2 rmf_traffic_schedule --ros-args \
     -p use_sim_time:=true &
   TRAFFIC_SCHED_PID=$!
-  if /opt/rmf/scripts/wait-for-service.sh /rmf_traffic/register_participant 30; then
+  if /opt/rmf/scripts/wait-for-service.sh /rmf_traffic/register_participant 45; then
     echo "[simulation-world] Traffic schedule registered (pid ${TRAFFIC_SCHED_PID})"
+    traffic_schedule_ok=1
     break
   fi
   echo "[simulation-world] Traffic schedule did not register in time, restarting..."
-  kill "${TRAFFIC_SCHED_PID}" 2>/dev/null || true
+  kill_and_confirm_dead "${TRAFFIC_SCHED_PID}" "traffic schedule"
   sleep 5
 done
+if [ "${traffic_schedule_ok}" -ne 1 ]; then
+  echo "[simulation-world] FATAL: traffic schedule never registered after 6 attempts — exiting so the container restarts cleanly instead of running with a permanently-broken fleet adapter." >&2
+  exit 1
+fi
 
 # Global TF publisher: publishes robot TF on global /tf for RViz
 # (robot pods publish on namespaced /{robot}/tf for Nav2/SLAM)
@@ -169,6 +219,7 @@ echo "[simulation-world] Waiting 15s for Nav2 discovery in robot pods..."
 sleep 15
 
 echo "[simulation-world] Starting fleet adapter (all robots, single instance)..."
+fleet_adapter_ok=0
 for attempt in 1 2 3 4 5 6 7 8; do
   echo "[simulation-world] Fleet adapter attempt ${attempt}/8..."
   ros2 run rmf_demos_fleet_adapter fleet_adapter \
@@ -184,11 +235,16 @@ for attempt in 1 2 3 4 5 6 7 8; do
   if kill -0 ${FLEET_PID} 2>/dev/null \
       && ros2 node list 2>/dev/null | grep -q '_fleet_adapter$'; then
     echo "[simulation-world] Fleet adapter running and registered (pid ${FLEET_PID})"
+    fleet_adapter_ok=1
     break
   fi
   echo "[simulation-world] Fleet adapter exited or failed to register, retrying in 15s..."
-  kill "${FLEET_PID}" 2>/dev/null || true
+  kill_and_confirm_dead "${FLEET_PID}" "fleet adapter"
   sleep 15
 done
+if [ "${fleet_adapter_ok}" -ne 1 ]; then
+  echo "[simulation-world] FATAL: fleet adapter never registered after 8 attempts — exiting so the container restarts cleanly instead of running with no fleet adapter." >&2
+  exit 1
+fi
 
 wait ${SIM_PID}

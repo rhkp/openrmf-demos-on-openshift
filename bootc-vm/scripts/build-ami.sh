@@ -28,10 +28,18 @@ HOST_IMAGE="${HOST_IMAGE:-quay.io/rhkp/openrmf-office-bootc-host:latest}"
 AWS_AMI_NAME="${AWS_AMI_NAME:-rhkp-openrmf-office-bootc-host}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 AWS_ARCH="${AWS_ARCH:-amd64}"
-# fedora-bootc (unlike centos-bootc/rhel-bootc) has no default root
+# Neither fedora-bootc nor Hummingbird's bootc-os have a default root
 # filesystem type registered — bib fails with "missing required info:
-# DefaultRootFs" / "no default root filesystem type specified" without this.
-ROOTFS="${ROOTFS:-xfs}"
+# DefaultRootFs" without this. ext4, not xfs: confirmed by a real failure
+# building against the Hummingbird base — `mkfs.xfs: No such file or
+# directory` inside bib's disk-assembly sandbox, isolated (via a cheap
+# local `--type qcow2` test, no AWS involved) to `xfsprogs` genuinely not
+# being installed anywhere in the Hummingbird image (`rpm -q xfsprogs`
+# confirms absent; `e2fsprogs` is present) — osbuild's mkfs stage needs the
+# filesystem tool present in the source image itself, not just its own
+# buildroot. ext4 (`e2fsprogs`) works cleanly end-to-end; xfs does not on
+# this base.
+ROOTFS="${ROOTFS:-ext4}"
 # Reuses the bucket already provisioned/working for bootc-demos in this account.
 S3_BUCKET="${S3_BUCKET:-rhkp-bootc-demo-staging}"
 
