@@ -1,114 +1,87 @@
 # OpenRMF Demos on OpenShift
 
-Run [Open-RMF demos](https://github.com/open-rmf/rmf_demos) (ROS 2 Humble + Gazebo) on OpenShift. Each world has its own folder, **Helm chart**, and deploy script.
+Run [Open-RMF demos](https://github.com/open-rmf/rmf_demos) (ROS 2 Jazzy + Gazebo) on OpenShift. Each world has its own folder, **Helm chart**, and deploy script.
 
-**Build:** Podman · **Registry:** Quay.io · **Deploy:** Helm
+**Images:** built and pushed from the separate
+[hummingbird-bootc-robotics-images](../hummingbird-bootc-robotics-images) repo
+(bootc-os + RoboStack, `hbr-*` image family). **This repo only deploys** —
+it does not build any images.
+
+**Deploy:** Helm · **Registry:** Quay.io
 
 ## Repository layout
 
 ```
 common/
-  Dockerfile
-  build-and-push.sh
-  scripts/
-  helm/openrmf-lib/        # Shared RMF Web + noVNC Helm library
-  openshift/                # Optional SCC bindings
+  scripts/read-helm-image.sh # Deploy-time helper (reads image ref out of a values.yaml)
+  helm/openrmf-lib/          # Shared RMF Web + noVNC Helm library
+  openshift/                 # Namespace/ServiceAccount/SCC (optional)
 
-office/                     # Office world (ready)
+office/                      # Office world (ready, hbr-* images)
   helm/
     Chart.yaml
-    values.yaml.example     # Copy → values.yaml (gitignored)
+    values.yaml.example      # Copy → values.yaml (gitignored)
     templates/
+  scripts/                   # Per-demo dispatch scripts
   deploy-openshift.sh
+  port-forward.sh
 
-airport/                    # Airport terminal world (ready)
+airport/                     # Airport terminal world (frozen — see below)
   helm/
   deploy-openshift.sh
-hotel/                      # Hotel world (ready)
+hotel/                       # Hotel world (frozen — see below)
   helm/
   deploy-openshift.sh
 ```
 
 ## Quick start — office demo
 
-### Local validation with Podman (optional)
-
-Validate on a Linux VM **before** OpenShift. See [office/PODMAN-VALIDATION.md](office/PODMAN-VALIDATION.md).
-
-```bash
-chmod +x office/run-podman-local.sh
-./office/run-podman-local.sh build
-./office/run-podman-local.sh start-desktop   # xrdp/GUI, or: start (headless)
-```
-
 ### 1. Configure Helm values
 
 ```bash
 cp office/helm/values.yaml.example office/helm/values.yaml
 # Edit office/helm/values.yaml — set image.fullRef, pullSecret.name, etc.
+# Images come from quay.io/<org>/hbr-* — see values.yaml.example comments.
 ```
 
-### 2. Authenticate to Quay
+### 2. Deploy
 
 ```bash
-podman login quay.io
-```
-
-### 3. Build, push, and deploy
-
-```bash
-chmod +x office/deploy-openshift.sh common/build-and-push.sh
+chmod +x office/deploy-openshift.sh
 ./office/deploy-openshift.sh
 ```
 
-Re-deploy without rebuild:
+This runs `helm upgrade --install rmf-office-demo-hbr office/helm ...` — no
+image build step, since images are pre-built in the
+hummingbird-bootc-robotics-images repo.
 
-```bash
-SKIP_BUILD=1 ./office/deploy-openshift.sh
-```
+## Quick start — hotel / airport demos (frozen)
 
-Helm only (image already in Quay):
-
-```bash
-helm upgrade --install rmf-office-demo office/helm \
-  -f office/helm/values.yaml \
-  -n rmf-demos --create-namespace --wait
-```
-
-## Quick start — hotel demo
-
-See [hotel/README.md](hotel/README.md) for full docs.
+Hotel and airport still deploy fine (their images already exist in Quay),
+but their images are **frozen** — the old `common/Dockerfile`-based build
+pipeline was removed once office migrated to `hbr-*` images, so these two
+can no longer be rebuilt. See the `image.fullRef` comments in
+[hotel/helm/values.yaml.example](hotel/helm/values.yaml.example) and
+[airport/helm/values.yaml.example](airport/helm/values.yaml.example).
 
 ```bash
 cp hotel/helm/values.yaml.example hotel/helm/values.yaml
-# Edit image refs and namespace (hotel image: openrmf-openshift-hotel-demo)
 ./hotel/deploy-openshift.sh
 ```
 
-## Quick start — airport demo
-
-See [airport/README.md](airport/README.md) for full docs.
-
 ```bash
 cp airport/helm/values.yaml.example airport/helm/values.yaml
-# Edit image refs and namespace (airport image: openrmf-openshift-airport-demo)
 ./airport/deploy-openshift.sh
 ```
 
-## Which Dockerfile builds which image?
-
-See [common/IMAGES.md](common/IMAGES.md) — a Dockerfile's location doesn't
-tell you what image it produces or who consumes it (e.g. `common/novnc/`
-and `common/zenoh-router/` both feed images used by every demo *and* by
-`bootc-vm/`). That file is the single source of truth; don't infer it from
-folder names.
+Migrating either to `hbr-*` images is a fast-follow — see the
+hummingbird-bootc-robotics-images repo's README for the image build layout.
 
 ## Prerequisites
 
 - OpenShift 4.x cluster
 - `oc` and **helm** CLIs
-- **Podman** on your build machine
-- Quay.io account with push access
+- Quay.io account (images already pushed by the image-building repo)
 
 ## Sensitive / local files (gitignored)
 
@@ -117,30 +90,25 @@ folder names.
 | `office/helm/values.yaml` | Image ref, pull secrets, resources |
 | `hotel/helm/values.yaml` | Same pattern |
 | `airport/helm/values.yaml` | Same pattern |
-| `common/image.env` | Optional fallback for builds without Helm values |
-| `bootc-vm/config.toml` | SSH public key + disk sizing for the bootc host image build |
 | `.env`, `.env.local` | General secrets |
 
-Committed templates: `values.yaml.example` in each demo's `helm/` folder,
-`bootc-vm/config.toml.example`.
+Committed templates: `values.yaml.example` in each demo's `helm/` folder.
 
 ## How it works
 
 | Concern | Approach |
 |---|---|
-| Image build | Podman (`common/build-and-push.sh` or `common/build-all-demos.sh`) |
+| Image build | Not in this repo — see hummingbird-bootc-robotics-images |
 | Image registry | Quay.io (`image.fullRef` in `values.yaml`) |
 | OpenShift deploy | Helm chart per demo |
 | Pull secrets | `pullSecret.name` in `values.yaml` → ServiceAccount |
-| Local validation | `office/run-podman-local.sh` (see [office/PODMAN-VALIDATION.md](office/PODMAN-VALIDATION.md)) |
 
 ## Adding a new demo
 
-1. Create `<demo>/scripts/dispatch-task.sh`
-2. Add `COPY` to `common/Dockerfile`
+1. Build/push its image from the hummingbird-bootc-robotics-images repo
+2. Create `<demo>/scripts/dispatch-task.sh`
 3. Copy `office/helm/` → `<demo>/helm/`, update `values.yaml.example`
 4. Copy `office/deploy-openshift.sh` → `<demo>/deploy-openshift.sh`
-5. Rebuild: `VALUES_FILE=<demo>/helm/values.yaml ./common/build-and-push.sh`
 
 ## Roadmap
 
@@ -149,6 +117,8 @@ Committed templates: `values.yaml.example` in each demo's `helm/` folder,
 | **1** | Headless sim + logs + fleet monitor + patrol | Done |
 | **2** | RMF Web dashboard (2D map, robots, tasks) | **Available** — `rmfWeb.enabled` |
 | **3** | noVNC (Gazebo/RViz in browser) | **Available** — `novnc.enabled` |
+| **4** | Migrate office demo to `hbr-*` (bootc-os) images | Done |
+| **5** | Migrate hotel/airport demos to `hbr-*` images | Pending |
 
 Both visualizations live in `common/helm/openrmf-lib/` and are wired in the office chart. Enable either or both in `values.yaml`.
 

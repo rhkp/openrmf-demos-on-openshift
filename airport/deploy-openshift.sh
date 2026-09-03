@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build image with Podman, push to Quay.io, deploy airport demo via Helm.
+# Deploy airport demo via Helm. Images are pre-built and pushed from the
+# hummingbird-bootc-robotics-images repo — this repo no longer builds images.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -7,7 +8,6 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CHART_DIR="${SCRIPT_DIR}/helm"
 VALUES_FILE="${VALUES_FILE:-${CHART_DIR}/values.yaml}"
 RELEASE_NAME="${RELEASE_NAME:-rmf-airport-demo}"
-SKIP_BUILD="${SKIP_BUILD:-0}"
 SCALE_DOWN_OTHER="${SCALE_DOWN_OTHER:-1}"
 
 command -v helm >/dev/null 2>&1 || {
@@ -37,15 +37,8 @@ scale_down_if_running() {
 }
 
 if [[ "${SCALE_DOWN_OTHER}" == "1" ]]; then
-  scale_down_if_running rmf-office-demo
+  scale_down_if_running rmf-office-demo-hbr
   scale_down_if_running rmf-hotel-demo
-fi
-
-if [[ "${SKIP_BUILD}" != "1" ]]; then
-  echo "==> Building and pushing image with Podman"
-  VALUES_FILE="${VALUES_FILE}" "${ROOT_DIR}/common/build-and-push.sh"
-else
-  echo "==> Skipping image build/push (SKIP_BUILD=1)"
 fi
 
 echo "==> Updating Helm chart dependencies"

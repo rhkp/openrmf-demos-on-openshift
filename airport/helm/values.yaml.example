@@ -11,7 +11,12 @@ namespace:
   name: rmf-demos
 
 image:
-  # Full Quay.io reference — shared image with office demo (includes both worlds)
+  # FROZEN: this image can no longer be rebuilt — its Dockerfile
+  # (common/Dockerfile) and build scripts were removed once the office demo
+  # migrated to hbr-* images (see hummingbird-bootc-robotics-images repo).
+  # This tag only works as long as it still exists in Quay. Migrate airport
+  # to hbr-rmf-demos (once it bakes in the airport_terminal world) before
+  # touching this further.
   fullRef: quay.io/your-org/openrmf-openshift-office-demo:nav2-sensors
   pullPolicy: Always
 

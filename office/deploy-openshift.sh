@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Build image with Podman, push to Quay.io, deploy office demo via Helm.
+# Deploy office demo via Helm. Images are pre-built and pushed from the
+# hummingbird-bootc-robotics-images repo — this repo no longer builds images.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CHART_DIR="${SCRIPT_DIR}/helm"
 VALUES_FILE="${VALUES_FILE:-${CHART_DIR}/values.yaml}"
-RELEASE_NAME="${RELEASE_NAME:-rmf-office-demo}"
-SKIP_BUILD="${SKIP_BUILD:-0}"
+RELEASE_NAME="${RELEASE_NAME:-rmf-office-demo-hbr}"
 
 command -v helm >/dev/null 2>&1 || {
   echo "helm is required but not installed" >&2
@@ -22,13 +22,6 @@ fi
 
 NAMESPACE="$(awk '/^namespace:/{found=1; next} found && /^[[:space:]]+name:/{print $2; exit}' "${VALUES_FILE}")"
 NAMESPACE="${NAMESPACE:-rmf-demos}"
-
-if [[ "${SKIP_BUILD}" != "1" ]]; then
-  echo "==> Building and pushing image with Podman"
-  VALUES_FILE="${VALUES_FILE}" "${ROOT_DIR}/common/build-and-push.sh"
-else
-  echo "==> Skipping image build/push (SKIP_BUILD=1)"
-fi
 
 echo "==> Updating Helm chart dependencies"
 helm dependency update "${CHART_DIR}" >/dev/null

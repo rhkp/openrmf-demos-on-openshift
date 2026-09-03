@@ -3,14 +3,14 @@
 set -euo pipefail
 
 NAMESPACE="${1:-arhkp1-openrmf}"
-RELEASE="${2:-rmf-office-demo}"
+RELEASE="${2:-rmf-office-demo-hbr}"
 DASH_PORT="${DASH_PORT:-3000}"
 NOVNC_PORT="${NOVNC_PORT:-6080}"
 
 echo "==> Port-forwarding office demo (namespace: ${NAMESPACE})"
 echo ""
 echo "  Dashboard: http://localhost:${DASH_PORT}"
-echo "  noVNC:     http://localhost:${NOVNC_PORT}"
+echo "  noVNC:     http://localhost:${NOVNC_PORT}/vnc.html"
 echo ""
 echo "Press Ctrl+C to stop."
 

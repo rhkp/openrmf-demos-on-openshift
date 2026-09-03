@@ -11,7 +11,11 @@ namespace:
   name: rmf-demos
 
 image:
-  # Full Quay.io reference (built with common/build-and-push.sh)
+  # FROZEN: this image can no longer be rebuilt — its Dockerfile
+  # (common/Dockerfile) and build scripts were removed once the office demo
+  # migrated to hbr-* images (see hummingbird-bootc-robotics-images repo).
+  # This tag only works as long as it still exists in Quay. Migrate hotel
+  # to an hbr-rmf-demos-based image before touching this further.
   fullRef: quay.io/your-org/openrmf-openshift-hotel-demo:certified
   pullPolicy: Always
 

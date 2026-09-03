@@ -11,9 +11,15 @@ namespace:
   name: rmf-demos
 
 image:
-  # Full Quay.io reference (built with common/build-and-push.sh)
-  fullRef: quay.io/your-org/openrmf-openshift-office-demo:certified
+  # Full Quay.io reference — built and pushed from the separate
+  # hummingbird-bootc-robotics-images repo (images/rmf-demos/Containerfile).
+  # This repo only deploys; it no longer builds images.
+  fullRef: quay.io/your-org/hbr-rmf-demos:v0.1.0
   pullPolicy: Always
+  # hbr-rmf-demos (and hbr-rmf-web-zenoh below, which shares the same
+  # ROS_ENV_SETUP path — see common/helm/openrmf-lib/templates/_rmf-web.tpl)
+  # source RoboStack's conda env instead of /opt/ros/jazzy/setup.bash.
+  rosSetupPath: /opt/micromamba/envs/ros_env/setup.bash
 
 # Optional — for private Quay repositories
 pullSecret:
@@ -67,7 +73,10 @@ rmfWeb:
   enabled: true
   serverUri: ws://rmf-office-demo-api:80/_internal
   apiServer:
-    image: quay.io/your-org/openrmf-rmf-web-zenoh:latest
+    # hbr-rmf-web-zenoh: rmf-web's api_server rebuilt from source on
+    # bootc-os (see hummingbird-bootc-robotics-images repo) instead of
+    # extending ghcr.io/open-rmf/rmf-web/api-server.
+    image: quay.io/your-org/hbr-rmf-web-zenoh:v0.1.0
     pullPolicy: Always
     rmwImplementation: rmw_zenoh_cpp
     resources:
@@ -103,7 +112,7 @@ rmfWeb:
 # noVNC — stream Gazebo/RViz virtual desktop to browser
 novnc:
   enabled: true
-  image: quay.io/your-org/openrmf-openshift-office-demo:novnc
+  image: quay.io/your-org/hbr-novnc:v0.1.0
   pullPolicy: Always
   vncPort: 5900
   webPort: 8080
@@ -124,7 +133,7 @@ novnc:
 # Zenoh Router — central message broker (replaces DDS)
 zenoh:
   enabled: true
-  image: quay.io/your-org/openrmf-zenoh-router:latest
+  image: quay.io/your-org/hbr-zenoh-router:v0.1.0
   pullPolicy: Always
   port: 7447
   resources:

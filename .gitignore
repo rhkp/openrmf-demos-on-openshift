@@ -3,7 +3,6 @@
 .env.*
 !.env.example
 *.local
-common/image.env
 **/image.env
 secrets/
 *.pem
@@ -17,11 +16,6 @@ credentials.json
 # Helm local values (never commit)
 **/values.yaml
 !**/values.yaml.example
-
-# bootc-vm local config (contains a real SSH public key; not secret, but
-# per-deployer like the values.yaml pattern above)
-bootc-vm/config.toml
-!bootc-vm/config.toml.example
 
 # Build artifacts
 **/install/

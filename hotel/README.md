@@ -2,19 +2,24 @@
 
 Multi-level hotel world from [rmf_demos](https://github.com/open-rmf/rmf_demos#hotel-world) (`hotel.launch.xml`) — lobby, two guest levels, lifts, doors, and **3 robot fleets (4 robots)**.
 
-**Stack:** Podman build → Quay.io → Helm on OpenShift  
+**Stack:** Quay.io → Helm on OpenShift  
 **Visualization:** RMF Web dashboard (2D) + noVNC (Gazebo/RViz in browser)  
-**Image:** Dedicated `openrmf-openshift-hotel-demo` on Quay.io (same Dockerfile, separate repository).
+**Image:** Dedicated `openrmf-openshift-hotel-demo` on Quay.io.
+
+> **FROZEN image.** This demo's `common/Dockerfile`-based build pipeline was
+> removed once the office demo migrated to `hbr-*` (bootc-os) images. The
+> existing `openrmf-openshift-hotel-demo` tag in Quay still works and can
+> still be deployed, but it can no longer be rebuilt from this repo.
+> Migrating hotel to an `hbr-*` image is a pending fast-follow.
 
 ---
 
 ## Prerequisites
 
 - OpenShift 4.x cluster and `oc` logged in
-- `helm` and **Podman** on your build machine
-- Quay.io account with push access (`podman login quay.io`)
+- `helm` CLI
 
-> **One demo per namespace.** The deploy script scales down `rmf-office-demo` and `rmf-airport-demo` automatically. Set `SCALE_DOWN_OTHER=0` to skip.
+> **One demo per namespace.** The deploy script scales down `rmf-office-demo-hbr` and `rmf-airport-demo` automatically. Set `SCALE_DOWN_OTHER=0` to skip.
 
 ---
 
@@ -47,15 +52,10 @@ chmod +x hotel/deploy-openshift.sh
 ./hotel/deploy-openshift.sh
 ```
 
-This rebuilds the image (adds `hotel/scripts/`), pushes to Quay, scales down other demos, and deploys `rmf-hotel-demo`.
+This scales down other demos and deploys `rmf-hotel-demo` — no image build,
+`image.fullRef` must already point at an existing Quay tag.
 
 Hotel startup is slower (multi-fleet + lifts). Helm wait timeout is **20 minutes**.
-
-Re-deploy without rebuilding:
-
-```bash
-SKIP_BUILD=1 ./hotel/deploy-openshift.sh
-```
 
 ### Check the pods
 
@@ -182,6 +182,5 @@ helm uninstall rmf-hotel-demo -n "${NAMESPACE}"
 
 ## Notes
 
-- Uses a **dedicated Quay image** (`openrmf-openshift-hotel-demo`) — built from the same Dockerfile as office/airport.
+- Uses a **dedicated, frozen Quay image** (`openrmf-openshift-hotel-demo`) — see the FROZEN note above.
 - Hotel needs **more CPU/RAM** than office (4 robots, lifts, multi-level map).
-- After adding `hotel/scripts/` to the Dockerfile, run a full build once (`./hotel/deploy-openshift.sh` without `SKIP_BUILD`).

@@ -47,11 +47,15 @@ In your demo `templates/`:
 
 See [office/helm/templates/deployment.yaml](../../office/helm/templates/deployment.yaml) for the reference integration.
 
-## Scripts (image)
+## Scripts (deploy-time, ConfigMap-mounted)
 
 | Script | Purpose |
 |---|---|
-| `common/scripts/launch-simulation.sh` | Headless Gazebo (default) |
-| `common/scripts/launch-simulation-viz.sh` | Xvfb + x11vnc + Gazebo GUI for noVNC |
+| `<demo>/helm/files/launch-simulation.sh` | Headless Gazebo (default) |
+| `<demo>/helm/files/launch-simulation-viz.sh` | Xvfb + x11vnc + Gazebo GUI for noVNC |
 
-The demo image must include `xvfb`, `x11vnc`, and `x11-utils` (see `common/Dockerfile`).
+These live per-demo now (e.g. [office/helm/files/](../../office/helm/files/)),
+mounted into the pod via ConfigMap rather than baked into the image. The
+demo image itself must include `xvfb`, `x11vnc`, and `x11-utils` — for the
+`hbr-*` images that's `images/rmf-demos/Containerfile` in the
+hummingbird-bootc-robotics-images repo.

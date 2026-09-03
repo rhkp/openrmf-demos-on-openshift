@@ -2,18 +2,16 @@
 
 Indoor office world from [rmf_demos](https://github.com/open-rmf/rmf_demos) (`office.launch.xml`) — tinyRobot fleet, Gazebo simulation, and a sample patrol task (`coe` → `lounge`, 3 loops).
 
-**Stack:** Podman build → Quay.io → Helm on OpenShift  
+**Stack:** hbr-* images (pre-built in the hummingbird-bootc-robotics-images repo) → Quay.io → Helm on OpenShift  
 **Visualization:** RMF Web dashboard (2D) + noVNC (Gazebo/RViz in browser)
-
-> **Podman local validation (pre-OpenShift):** See [PODMAN-VALIDATION.md](PODMAN-VALIDATION.md) and `./run-podman-local.sh`.
 
 ---
 
 ## Prerequisites
 
 - OpenShift 4.x cluster and `oc` logged in
-- `helm` and **Podman** on your build machine
-- Quay.io account with push access (`podman login quay.io`)
+- `helm` CLI
+- Quay.io account (images already built/pushed by the image-building repo)
 
 ---
 
@@ -28,8 +26,8 @@ Edit `office/helm/values.yaml`:
 | Key | Set to |
 |---|---|
 | `namespace.name` | Your OpenShift project (e.g. `rmf-demos`) |
-| `image.fullRef` | `quay.io/<org>/openrmf-openshift-office-demo:certified` |
-| `novnc.image` | `quay.io/<org>/openrmf-openshift-office-demo:novnc` |
+| `image.fullRef` | `quay.io/<org>/hbr-rmf-demos:v0.1.0` |
+| `novnc.image` | `quay.io/<org>/hbr-novnc:v0.1.0` |
 | `rmfWeb.routes.clusterDomain` | Your cluster apps domain |
 | `novnc.routes.clusterDomain` | Same apps domain |
 
@@ -42,28 +40,24 @@ Edit `office/helm/values.yaml`:
 From the **repo root**:
 
 ```bash
-chmod +x office/deploy-openshift.sh common/build-and-push.sh
+chmod +x office/deploy-openshift.sh
 ./office/deploy-openshift.sh
 ```
 
 This will:
 
-1. Build and push the simulation image (`:certified`) and noVNC sidecar (`:novnc`) for **linux/amd64**
-2. Update Helm dependencies (`common/helm/openrmf-lib`)
-3. Deploy release `rmf-office-demo` into your namespace
+1. Update Helm dependencies (`common/helm/openrmf-lib`)
+2. Deploy release `rmf-office-demo-hbr` into your namespace
 
-First build can take **30+ minutes**. Re-deploy without rebuilding:
-
-```bash
-SKIP_BUILD=1 ./office/deploy-openshift.sh
-```
+No image build happens here — `image.fullRef` etc. must already point at
+images pushed from the hummingbird-bootc-robotics-images repo.
 
 ### Check the pod
 
 ```bash
 NAMESPACE=rmf-demos   # match values.yaml
 
-oc get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=openrmf-office-demo
+oc get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=openrmf-office-demo-hbr
 ```
 
 **Pass:** `6/6 Running` when `rmfWeb.enabled` and `novnc.enabled` are both true.
@@ -106,7 +100,7 @@ If routes are disabled (`rmfWeb.routes.enabled: false`, `novnc.routes.enabled: f
 ./office/port-forward.sh <namespace> [release-name]
 
 # Example:
-./office/port-forward.sh arhkp1-openrmf rmf-office-demo
+./office/port-forward.sh arhkp1-openrmf rmf-office-demo-hbr
 ```
 
 | View | Local URL |
@@ -131,7 +125,7 @@ The pod tries to auto-dispatch on startup. If timing is off you may see `Did not
 ```bash
 NAMESPACE=rmf-demos   # match values.yaml
 
-oc exec deployment/rmf-office-demo -n "${NAMESPACE}" -c simulation -- bash -c '
+oc exec deployment/rmf-office-demo-hbr -n "${NAMESPACE}" -c simulation -- bash -c '
 source /opt/rmf/scripts/ros-env.sh
 ros2 run rmf_demos_tasks dispatch_patrol -p coe lounge -n 3 --use_sim_time
 '
@@ -157,16 +151,16 @@ Robots should start moving in **noVNC** within a few seconds.
 
 ```bash
 # Robot positions (every 10s)
-oc logs -f deployment/rmf-office-demo -n "${NAMESPACE}" -c fleet-monitor
+oc logs -f deployment/rmf-office-demo-hbr -n "${NAMESPACE}" -c fleet-monitor
 
 # Navigation events
-oc logs -f deployment/rmf-office-demo -n "${NAMESPACE}" -c simulation | grep tinyRobot
+oc logs -f deployment/rmf-office-demo-hbr -n "${NAMESPACE}" -c simulation | grep tinyRobot
 ```
 
 ### Interactive shell (optional)
 
 ```bash
-oc rsh deployment/rmf-office-demo -n "${NAMESPACE}" -c simulation
+oc rsh deployment/rmf-office-demo-hbr -n "${NAMESPACE}" -c simulation
 source /opt/rmf/scripts/ros-env.sh
 ros2 run rmf_demos_tasks dispatch_patrol -p coe lounge -n 3 --use_sim_time
 ```
@@ -179,7 +173,7 @@ Auto-dispatch runs **once per pod** (marker file in `task-dispatch`). To dispatc
 - Restart the pod to trigger auto-dispatch again:
 
 ```bash
-oc delete pod -l app.kubernetes.io/name=openrmf-office-demo -n "${NAMESPACE}"
+oc delete pod -l app.kubernetes.io/name=openrmf-office-demo-hbr -n "${NAMESPACE}"
 ```
 
 ---
@@ -190,17 +184,17 @@ oc delete pod -l app.kubernetes.io/name=openrmf-office-demo -n "${NAMESPACE}"
 NAMESPACE=rmf-demos
 
 # 1. Pod healthy
-oc get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=openrmf-office-demo
+oc get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=openrmf-office-demo-hbr
 
 # 2. Simulation up
-oc logs deployment/rmf-office-demo -n "${NAMESPACE}" -c simulation --tail=20
+oc logs deployment/rmf-office-demo-hbr -n "${NAMESPACE}" -c simulation --tail=20
 
 # 3. Fleet publishing
-oc exec deployment/rmf-office-demo -n "${NAMESPACE}" -c simulation -- bash -c \
+oc exec deployment/rmf-office-demo-hbr -n "${NAMESPACE}" -c simulation -- bash -c \
   'source /opt/rmf/scripts/ros-env.sh && ros2 topic echo /fleet_states --once'
 
 # 4. Patrol queued (after manual or auto dispatch)
-oc logs deployment/rmf-office-demo -n "${NAMESPACE}" -c simulation --tail=5 | grep navigat
+oc logs deployment/rmf-office-demo-hbr -n "${NAMESPACE}" -c simulation --tail=5 | grep navigat
 ```
 
 ---
@@ -213,14 +207,14 @@ oc logs deployment/rmf-office-demo -n "${NAMESPACE}" -c simulation --tail=5 | gr
 | Sample patrol | `coe` → `lounge`, 3 rounds |
 | Dispatch script (auto) | `office/scripts/dispatch-task.sh` |
 | Readiness wait | `dispatch.readyWaitSeconds` (default 30) |
-| Helm release | `rmf-office-demo` |
+| Helm release | `rmf-office-demo-hbr` |
 | Shared viz library | `common/helm/openrmf-lib/` |
 
 ### Helm-only deploy
 
 ```bash
 helm dependency update office/helm
-helm upgrade --install rmf-office-demo office/helm \
+helm upgrade --install rmf-office-demo-hbr office/helm \
   -f office/helm/values.yaml \
   -n "${NAMESPACE}" --create-namespace --wait
 ```
@@ -228,15 +222,16 @@ helm upgrade --install rmf-office-demo office/helm \
 ### Tear down
 
 ```bash
-helm uninstall rmf-office-demo -n "${NAMESPACE}"
+helm uninstall rmf-office-demo-hbr -n "${NAMESPACE}"
 ```
 
 ---
 
 ## Notes
 
-- Builds use `--platform linux/amd64` (required when building on Apple Silicon).
-- noVNC needs `xvfb` / `x11vnc` in the simulation image — use a full build, not `SKIP_BUILD=1`, after Dockerfile changes.
+- Image changes (noVNC deps, new packages, etc.) happen in the
+  hummingbird-bootc-robotics-images repo, not here — rebuild/push there,
+  then bump `image.fullRef` / `novnc.image` tags in `values.yaml`.
 - Run **one demo per namespace** (ROS discovery is pod-local).
 - `office/helm/values.yaml` is local config; commit changes via `values.yaml.example` only.
 

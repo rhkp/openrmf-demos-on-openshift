@@ -2,9 +2,16 @@
 
 Autonomous SLAM mapping of the airport terminal from [rmf_demos](https://github.com/open-rmf/rmf_demos#airport-terminal-world) using **robot-as-pod** architecture. A single robot (tinyRobot_0) autonomously explores the entire terminal using frontier-based exploration, building a map from scratch with no pre-built nav graphs.
 
-**Stack:** Podman build → Quay.io → Helm on OpenShift
+**Stack:** Quay.io → Helm on OpenShift
 **Navigation:** Nav2 (SmacPlanner2D) + SLAM Toolbox + explore_lite
 **Visualization:** noVNC (Gazebo + RViz SLAM map in browser) + RMF Web dashboard
+
+> **FROZEN image.** This demo shares `openrmf-openshift-office-demo:nav2-sensors`
+> with the (now-migrated) office demo's old image. That Dockerfile-based build
+> pipeline was removed once office moved to `hbr-*` (bootc-os) images. The
+> existing tag in Quay still works and can still be deployed, but it can no
+> longer be rebuilt from this repo. Migrating airport to an `hbr-*` image
+> (once it bakes in the airport_terminal world) is a pending fast-follow.
 
 ---
 
@@ -57,14 +64,12 @@ Edit `airport/helm/values.yaml`:
 
 ---
 
-## 2. Build and deploy
+## 2. Deploy
+
+No image build here — `image.fullRef` in `values.yaml` must already point at
+an existing Quay tag (see the FROZEN note above).
 
 ```bash
-# Build image on your build machine
-podman build -t quay.io/<org>/openrmf-openshift-office-demo:nav2-sensors -f common/Dockerfile .
-podman push quay.io/<org>/openrmf-openshift-office-demo:nav2-sensors
-
-# Deploy with Helm
 helm dependency update airport/helm
 helm upgrade --install rmf-airport-demo airport/helm \
   -f airport/helm/values.yaml \
