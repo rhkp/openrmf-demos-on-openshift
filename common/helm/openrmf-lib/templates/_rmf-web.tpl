@@ -50,7 +50,16 @@
   args:
     - |
       set -eo pipefail
-      source /opt/ros/jazzy/setup.bash
+      source {{ $root.Values.image.rosSetupPath | default "/opt/ros/jazzy/setup.bash" }}
+      # The old jazzy-based rmf-web image installs RMF's own message
+      # packages (ros-jazzy-rmf-*-msgs) directly into /opt/ros/jazzy via
+      # apt, so sourcing rosSetupPath alone is sufficient there. Images
+      # built on a conda/colcon base (see hummingbird-bootc-robotics-images)
+      # keep RMF's own packages in a separate colcon workspace overlay
+      # instead — source it too if present, harmless no-op otherwise.
+      if [ -n "${RMF_WS:-}" ] && [ -f "${RMF_WS}/install/setup.bash" ]; then
+        source "${RMF_WS}/install/setup.bash"
+      fi
       exec rmf_api_server
   workingDir: /ws
   env:
